@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus Hunter - Autonomous Bug Bounty Intelligence Platform</title>
+    <meta name="description" content="Advanced autonomous bug bounty hunting platform with AI-powered reconnaissance, exploitation, and reporting capabilities." />
+    
+    <!-- Preload fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    
+    <style>
+      /* Prevent flash of unstyled content */
+      body {
+        background-color: #0a0a0a;
+        color: #00ffff;
+        font-family: 'JetBrains Mono', monospace;
+        overflow-x: hidden;
+      }
+      
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      ::-webkit-scrollbar-track {
+        background: #1a1a1a;
+      }
+      
+      ::-webkit-scrollbar-thumb {
+        background: #00ffff;
+        border-radius: 4px;
+        box-shadow: 0 0 5px #00ffff;
+      }
+      
+      ::-webkit-scrollbar-thumb:hover {
+        background: #00cccc;
+        box-shadow: 0 0 10px #00ffff;
+      }
+      
+      /* Loading animation */
+      .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+      }
+      
+      .loading-logo {
+        font-size: 3rem;
+        font-weight: 800;
+        color: #00ffff;
+        text-shadow: 0 0 20px #00ffff;
+        animation: pulse 2s ease-in-out infinite;
+        margin-bottom: 2rem;
+        font-family: 'Orbitron', sans-serif;
+      }
+      
+      .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 3px solid #1a1a1a;
+        border-top: 3px solid #00ffff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+      }
+      
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      /* Hide loading screen after app loads */
+      .loaded .loading-screen {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Loading screen -->
+    <div class="loading-screen" id="loading">
+      <div class="loading-logo">NEXUS HUNTER</div>
+      <div class="loading-spinner"></div>
+      <div style="margin-top: 1rem; color: #888; font-size: 0.9rem;">
+        Initializing Autonomous Security Platform...
+      </div>
+    </div>
+    
+    <!-- React app root -->
+    <div id="root"></div>
+    
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Remove loading screen after app loads -->
+    <script>
+      window.addEventListener('load', function() {
+        setTimeout(() => {
+          document.body.classList.add('loaded');
+          setTimeout(() => {
+            const loading = document.getElementById('loading');
+            if (loading) {
+              loading.style.display = 'none';
+            }
+          }, 500);
+        }, 1000);
+      });
+    </script>
+  </body>
+</html> 

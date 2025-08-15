@@ -1,0 +1,248 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-cyber-gray;
+  }
+  
+  html {
+    @apply h-full bg-cyber-black;
+  }
+  
+  body {
+    @apply h-full bg-cyber-black text-primary font-mono antialiased;
+    @apply overflow-x-hidden;
+  }
+  
+  #root {
+    @apply h-full;
+  }
+}
+
+@layer components {
+  /* Custom button styles */
+  .btn-cyber {
+    @apply px-4 py-2 bg-transparent border border-primary text-primary;
+    @apply hover:bg-primary hover:text-cyber-black transition-all duration-300;
+    @apply font-mono font-medium uppercase tracking-wider;
+    @apply relative overflow-hidden;
+    @apply border-glow;
+  }
+  
+  .btn-cyber:hover {
+    @apply shadow-neon-lg;
+  }
+  
+  .btn-cyber::before {
+    content: '';
+    @apply absolute inset-0 bg-primary transform -translate-x-full;
+    @apply transition-transform duration-300 ease-out;
+  }
+  
+  .btn-cyber:hover::before {
+    @apply translate-x-0;
+  }
+  
+  .btn-cyber > * {
+    @apply relative z-10;
+  }
+  
+  /* Input styles */
+  .input-cyber {
+    @apply bg-cyber-dark border border-cyber-light text-primary;
+    @apply focus:border-primary focus:ring-2 focus:ring-primary/30;
+    @apply px-3 py-2 font-mono placeholder-cyber-light/50;
+    @apply transition-all duration-200;
+  }
+  
+  .input-cyber:focus {
+    @apply border-glow;
+  }
+  
+  /* Card styles */
+  .card-cyber {
+    @apply bg-cyber-dark/50 border border-cyber-light/30;
+    @apply backdrop-blur-sm;
+    @apply relative overflow-hidden;
+  }
+  
+  .card-cyber::before {
+    content: '';
+    @apply absolute top-0 left-0 w-full h-px;
+    @apply bg-gradient-to-r from-transparent via-primary to-transparent;
+    @apply opacity-50;
+  }
+  
+  /* Status indicator styles */
+  .status-running {
+    @apply text-neon-green animate-pulse-neon;
+  }
+  
+  .status-completed {
+    @apply text-success;
+  }
+  
+  .status-failed {
+    @apply text-danger;
+  }
+  
+  .status-pending {
+    @apply text-warning;
+  }
+  
+  .status-cancelled {
+    @apply text-cyber-light;
+  }
+  
+  /* Severity styles */
+  .severity-critical {
+    @apply text-danger border-danger;
+  }
+  
+  .severity-high {
+    @apply text-neon-orange border-neon-orange;
+  }
+  
+  .severity-medium {
+    @apply text-warning border-warning;
+  }
+  
+  .severity-low {
+    @apply text-success border-success;
+  }
+  
+  .severity-info {
+    @apply text-info border-info;
+  }
+  
+  /* Progress bar */
+  .progress-cyber {
+    @apply bg-cyber-gray rounded-full overflow-hidden relative;
+  }
+  
+  .progress-cyber::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10;
+    @apply animate-pulse;
+  }
+  
+  .progress-fill {
+    @apply h-full bg-gradient-to-r from-primary to-neon-green;
+    @apply transition-all duration-500 ease-out;
+    @apply relative;
+  }
+  
+  .progress-fill::after {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent;
+    @apply animate-scan-line;
+  }
+  
+  /* Table styles */
+  .table-cyber {
+    @apply w-full border-collapse;
+  }
+  
+  .table-cyber th {
+    @apply bg-cyber-gray text-left px-4 py-3 font-mono text-sm uppercase tracking-wider;
+    @apply border-b border-cyber-light text-primary;
+  }
+  
+  .table-cyber td {
+    @apply px-4 py-3 border-b border-cyber-light/20;
+    @apply text-sm font-mono;
+  }
+  
+  .table-cyber tr:hover {
+    @apply bg-cyber-light/10;
+  }
+  
+  /* Modal backdrop */
+  .modal-backdrop {
+    @apply fixed inset-0 bg-cyber-black/80 backdrop-blur-sm;
+    @apply flex items-center justify-center p-4;
+    @apply z-50;
+  }
+  
+  /* Scrollbar styles */
+  .scrollbar-cyber {
+    scrollbar-width: thin;
+    scrollbar-color: #00ffff #1a1a1a;
+  }
+  
+  .scrollbar-cyber::-webkit-scrollbar {
+    @apply w-2;
+  }
+  
+  .scrollbar-cyber::-webkit-scrollbar-track {
+    @apply bg-cyber-dark;
+  }
+  
+  .scrollbar-cyber::-webkit-scrollbar-thumb {
+    @apply bg-primary rounded-full;
+    box-shadow: 0 0 5px #00ffff;
+  }
+  
+  /* Code block styles */
+  .code-cyber {
+    @apply bg-cyber-black border border-cyber-light;
+    @apply p-4 rounded font-mono text-sm;
+    @apply overflow-x-auto scrollbar-cyber;
+  }
+  
+  /* Loading spinner */
+  .spinner-cyber {
+    @apply w-6 h-6 border-2 border-cyber-light border-t-primary;
+    @apply rounded-full animate-spin;
+  }
+  
+  /* Glitch effect */
+  .glitch {
+    @apply relative;
+    animation: glitch 2s infinite;
+  }
+  
+  .glitch::before,
+  .glitch::after {
+    content: attr(data-text);
+    @apply absolute top-0 left-0 w-full h-full;
+  }
+  
+  .glitch::before {
+    animation: glitch-1 2s infinite;
+    color: #ff00ff;
+    z-index: -1;
+  }
+  
+  .glitch::after {
+    animation: glitch-2 2s infinite;
+    color: #00ffff;
+    z-index: -2;
+  }
+  
+  @keyframes glitch {
+    0%, 100% { transform: translate(0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+  }
+  
+  @keyframes glitch-1 {
+    0%, 100% { transform: translate(0); }
+    20% { transform: translate(2px, -2px); }
+    40% { transform: translate(-2px, 2px); }
+    60% { transform: translate(-2px, -2px); }
+    80% { transform: translate(2px, 2px); }
+  }
+  
+  @keyframes glitch-2 {
+    0%, 100% { transform: translate(0); }
+    20% { transform: translate(-2px, -2px); }
+    40% { transform: translate(2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(-2px, 2px); }
+  }
+} 
