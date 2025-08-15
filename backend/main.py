@@ -29,6 +29,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await Database.connect()
     logger.info("✅ Database connected")
     
+    # Create database tables
+    await Database.create_tables()
+    logger.info("✅ Database tables created")
+    
     # Initialize Redis
     await RedisClient.connect()
     logger.info("✅ Redis connected")

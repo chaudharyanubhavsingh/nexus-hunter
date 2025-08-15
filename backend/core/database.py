@@ -65,6 +65,21 @@ class Database:
         logger.info(f"🗄️ Database engine created: {settings.database_url}")
     
     @classmethod
+    async def create_tables(cls) -> None:
+        """Create all database tables"""
+        # Import models to register them with Base
+        from models.scan import Target, Scan, Finding  # noqa
+        from models.base import BaseModel  # noqa
+        
+        if not cls.engine:
+            raise RuntimeError("Database not connected. Call Database.connect() first.")
+        
+        async with cls.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        
+        logger.info("🗄️ Database tables created")
+    
+    @classmethod
     async def disconnect(cls) -> None:
         """Close database connection"""
         if cls.engine:

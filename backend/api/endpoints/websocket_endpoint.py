@@ -14,6 +14,49 @@ from core.websocket_manager import WebSocketManager
 router = APIRouter()
 
 
+@router.websocket("")
+async def websocket_simple(websocket: WebSocket):
+    """Simple WebSocket endpoint for frontend connectivity"""
+    await websocket.accept()
+    client_id = str(uuid4())
+    
+    try:
+        # Add to connection manager
+        WebSocketManager.manager.active_connections[client_id] = websocket
+        logger.info(f"🔌 Simple WebSocket client connected: {client_id}")
+        
+        # Send connection status
+        await websocket.send_text(json.dumps({
+            "type": "connection_status",
+            "status": "connected",
+            "client_id": client_id
+        }))
+        
+        # Keep connection alive and handle messages
+        while True:
+            try:
+                # Wait for messages from client
+                data = await websocket.receive_text()
+                
+                # Echo back for now
+                await websocket.send_text(json.dumps({
+                    "type": "echo",
+                    "data": f"Echo: {data}"
+                }))
+                
+            except WebSocketDisconnect:
+                logger.info(f"🔌 Simple WebSocket client disconnected: {client_id}")
+                break
+                
+    except Exception as e:
+        logger.error(f"Simple WebSocket error: {e}")
+        
+    finally:
+        # Clean up
+        if client_id in WebSocketManager.manager.active_connections:
+            del WebSocketManager.manager.active_connections[client_id]
+
+
 @router.websocket("/connect")
 async def websocket_endpoint(websocket: WebSocket):
     """Main WebSocket endpoint for real-time communication"""
