@@ -88,8 +88,8 @@ export interface CreateScanRequest {
 class ApiService {
   // Targets
   async getTargets(): Promise<Target[]> {
-    const response = await api.get('/api/targets');
-    return response.data;
+    const response = await api.get('/api/targets/');
+    return response.data.targets || [];
   }
 
   async getTarget(id: string): Promise<Target> {
@@ -98,7 +98,7 @@ class ApiService {
   }
 
   async createTarget(data: CreateTargetRequest): Promise<Target> {
-    const response = await api.post('/api/targets', data);
+    const response = await api.post('/api/targets/', data);
     return response.data;
   }
 
@@ -113,8 +113,8 @@ class ApiService {
 
   // Scans
   async getScans(): Promise<Scan[]> {
-    const response = await api.get('/api/scans');
-    return response.data;
+    const response = await api.get('/api/scans/');
+    return response.data.scans || [];
   }
 
   async getScan(id: string): Promise<Scan> {
@@ -123,7 +123,7 @@ class ApiService {
   }
 
   async createScan(data: CreateScanRequest): Promise<Scan> {
-    const response = await api.post('/api/scans', data);
+    const response = await api.post('/api/scans/', data);
     return response.data;
   }
 
@@ -142,10 +142,9 @@ class ApiService {
   }
 
   // Vulnerabilities
-  async getVulnerabilities(scanId?: string): Promise<Vulnerability[]> {
-    const params = scanId ? { scan_id: scanId } : {};
-    const response = await api.get('/api/vulnerabilities', { params });
-    return response.data;
+  async getVulnerabilities(): Promise<Vulnerability[]> {
+    const response = await api.get('/api/vulnerabilities/');
+    return response.data || [];
   }
 
   // Reports

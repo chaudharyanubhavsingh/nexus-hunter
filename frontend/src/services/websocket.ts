@@ -1,4 +1,4 @@
-const WS_BASE_URL = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000/ws';
+const WS_BASE_URL = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000/api/ws';
 
 export interface WebSocketMessage {
   type: 'scan_update' | 'vulnerability_found' | 'system_status' | 'scan_completed';

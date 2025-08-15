@@ -5,6 +5,7 @@ Scan management API endpoints
 import asyncio
 from typing import Dict, List, Any, Optional
 from uuid import UUID, uuid4
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,8 +48,8 @@ class ScanResponse(BaseModel):
     progress_percentage: int
     results: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -397,4 +398,44 @@ async def retry_scan(
         raise
     except Exception as e:
         logger.error(f"Failed to retry scan {scan_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) 
+
+
+@router.get("/vulnerabilities/", response_model=List[Dict[str, Any]])
+async def get_vulnerabilities(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get all vulnerabilities from completed scans"""
+    try:
+        # Query all scans with results
+        query = select(Scan).where(Scan.status == ScanStatus.COMPLETED)
+        result = await db.execute(query)
+        scans = result.scalars().all()
+        
+        vulnerabilities = []
+        for scan in scans:
+            if scan.results and 'vulnerabilities' in scan.results:
+                for vuln in scan.results['vulnerabilities']:
+                    vuln_data = {
+                        'id': f"{scan.id}_{vuln.get('id', len(vulnerabilities))}",
+                        'scan_id': scan.id,
+                        'scan_name': scan.name,
+                        'title': vuln.get('title', 'Unknown'),
+                        'severity': vuln.get('severity', 'info'),
+                        'description': vuln.get('description', ''),
+                        'found_at': scan.updated_at.isoformat(),
+                        'target_id': scan.target_id
+                    }
+                    vulnerabilities.append(vuln_data)
+        
+        # Apply pagination
+        total = len(vulnerabilities)
+        vulnerabilities = vulnerabilities[skip:skip + limit]
+        
+        return vulnerabilities
+        
+    except Exception as e:
+        logger.error(f"Error fetching vulnerabilities: {e}")
         raise HTTPException(status_code=500, detail=str(e)) 
