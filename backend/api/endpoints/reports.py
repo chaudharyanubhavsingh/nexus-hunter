@@ -2,8 +2,9 @@
 Report management API endpoints
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from uuid import UUID
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
@@ -14,7 +15,7 @@ from loguru import logger
 import io
 
 from core.database import get_db_session
-from models.scan import Scan
+from models.scan import Scan, ScanStatus
 from core.redis_client import RedisClient
 
 router = APIRouter()
@@ -26,6 +27,42 @@ class ReportResponse(BaseModel):
     report_types: list
     generated_at: str
     metadata: Dict[str, Any]
+
+
+@router.get("/")
+async def get_all_reports(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get all available reports from completed scans"""
+    try:
+        # Get all completed scans
+        query = select(Scan).where(Scan.status == ScanStatus.COMPLETED).offset(skip).limit(limit)
+        result = await db.execute(query)
+        scans = result.scalars().all()
+        
+        reports = []
+        for scan in scans:
+            if scan.results:
+                report = {
+                    "id": f"report_{scan.id}",
+                    "scan_id": scan.id,
+                    "scan_name": scan.name,
+                    "target_id": scan.target_id,
+                    "report_types": ["executive", "technical", "disclosure"],
+                    "generated_at": scan.updated_at.isoformat() if scan.updated_at else scan.created_at.isoformat(),
+                    "status": "completed",
+                    "findings_count": len(scan.results.get("vulnerabilities", [])) if scan.results else 0,
+                    "critical_findings": len([v for v in scan.results.get("vulnerabilities", []) if v.get("severity") == "critical"]) if scan.results else 0
+                }
+                reports.append(report)
+        
+        return {"reports": reports, "total": len(reports)}
+        
+    except Exception as e:
+        logger.error(f"Error fetching reports: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{scan_id}")

@@ -149,9 +149,13 @@ class ApiService {
 
   // Reports
   async getReports(scanId?: string): Promise<any[]> {
-    const params = scanId ? { scan_id: scanId } : {};
-    const response = await api.get('/api/reports', { params });
-    return response.data;
+    if (scanId) {
+      const response = await api.get(`/api/reports/${scanId}`);
+      return response.data;
+    } else {
+      const response = await api.get('/api/reports/');
+      return response.data.reports || [];
+    }
   }
 
   async getExecutiveSummary(scanId: string, format: 'markdown' | 'html' = 'markdown'): Promise<string> {
