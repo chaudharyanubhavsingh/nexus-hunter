@@ -29,7 +29,8 @@ async def websocket_simple(websocket: WebSocket):
         await websocket.send_text(json.dumps({
             "type": "connection_status",
             "status": "connected",
-            "client_id": client_id
+            "client_id": client_id,
+            "boot_id": WebSocketManager.get_boot_id(),
         }))
         
         # Keep connection alive and handle messages
@@ -41,7 +42,8 @@ async def websocket_simple(websocket: WebSocket):
                 # Echo back for now
                 await websocket.send_text(json.dumps({
                     "type": "echo",
-                    "data": f"Echo: {data}"
+                    "data": f"Echo: {data}",
+                    "boot_id": WebSocketManager.get_boot_id(),
                 }))
                 
             except WebSocketDisconnect:
@@ -78,7 +80,8 @@ async def websocket_endpoint(websocket: WebSocket):
             "type": "connection_established",
             "client_id": client_id,
             "message": "Connected to Nexus Hunter real-time feed",
-            "timestamp": None
+            "timestamp": None,
+            "boot_id": WebSocketManager.get_boot_id(),
         }
         await WebSocketManager.manager.send_personal_message(welcome_message, client_id)
         
@@ -100,7 +103,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 error_message = {
                     "type": "error",
                     "message": "Invalid JSON format",
-                    "timestamp": None
+                    "timestamp": None,
+                    "boot_id": WebSocketManager.get_boot_id(),
                 }
                 await WebSocketManager.manager.send_personal_message(error_message, client_id)
                 
@@ -109,7 +113,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 error_message = {
                     "type": "error",
                     "message": f"Message handling error: {str(e)}",
-                    "timestamp": None
+                    "timestamp": None,
+                    "boot_id": WebSocketManager.get_boot_id(),
                 }
                 await WebSocketManager.manager.send_personal_message(error_message, client_id)
                 
@@ -136,7 +141,8 @@ async def handle_client_message(client_id: str, message: Dict[str, Any]):
             "type": "subscription_confirmed",
             "topics": topics,
             "message": f"Subscribed to {len(topics)} topics",
-            "timestamp": None
+            "timestamp": None,
+            "boot_id": WebSocketManager.get_boot_id(),
         }
         await WebSocketManager.manager.send_personal_message(response, client_id)
         
@@ -150,7 +156,8 @@ async def handle_client_message(client_id: str, message: Dict[str, Any]):
             "type": "unsubscription_confirmed",
             "topics": topics,
             "message": f"Unsubscribed from {len(topics)} topics",
-            "timestamp": None
+            "timestamp": None,
+            "boot_id": WebSocketManager.get_boot_id(),
         }
         await WebSocketManager.manager.send_personal_message(response, client_id)
         
@@ -159,7 +166,8 @@ async def handle_client_message(client_id: str, message: Dict[str, Any]):
         response = {
             "type": "pong",
             "message": "Connection alive",
-            "timestamp": None
+            "timestamp": None,
+            "boot_id": WebSocketManager.get_boot_id(),
         }
         await WebSocketManager.manager.send_personal_message(response, client_id)
         
@@ -172,7 +180,8 @@ async def handle_client_message(client_id: str, message: Dict[str, Any]):
                 "server_status": "online",
                 "version": "1.0.0"
             },
-            "timestamp": None
+            "timestamp": None,
+            "boot_id": WebSocketManager.get_boot_id(),
         }
         await WebSocketManager.manager.send_personal_message(status, client_id)
         
@@ -181,7 +190,8 @@ async def handle_client_message(client_id: str, message: Dict[str, Any]):
         error_response = {
             "type": "error",
             "message": f"Unknown message type: {message_type}",
-            "timestamp": None
+            "timestamp": None,
+            "boot_id": WebSocketManager.get_boot_id(),
         }
         await WebSocketManager.manager.send_personal_message(error_response, client_id)
 
@@ -206,7 +216,8 @@ async def scan_websocket(websocket: WebSocket, scan_id: str):
             "scan_id": scan_id,
             "client_id": client_id,
             "message": f"Connected to scan {scan_id} updates",
-            "timestamp": None
+            "timestamp": None,
+            "boot_id": WebSocketManager.get_boot_id(),
         }
         await WebSocketManager.manager.send_personal_message(welcome_message, client_id)
         
@@ -221,7 +232,8 @@ async def scan_websocket(websocket: WebSocket, scan_id: str):
                     pong_response = {
                         "type": "pong",
                         "scan_id": scan_id,
-                        "timestamp": None
+                        "timestamp": None,
+                        "boot_id": WebSocketManager.get_boot_id(),
                     }
                     await WebSocketManager.manager.send_personal_message(pong_response, client_id)
                     

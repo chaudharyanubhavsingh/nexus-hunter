@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useReports, useDownloadReport, useScans } from '../hooks/useApi';
 
 const Reports: React.FC = () => {
-  const { state, actions } = useAppContext();
+  const { state } = useAppContext();
   const reportsQuery = useReports();
   const downloadReportMutation = useDownloadReport();
 

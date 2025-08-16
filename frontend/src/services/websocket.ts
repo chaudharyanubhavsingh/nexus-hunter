@@ -1,17 +1,18 @@
 const WS_BASE_URL = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000/api/ws/';
 
 export interface WebSocketMessage {
-  type: 'scan_update' | 'vulnerability_found' | 'system_status' | 'scan_completed' | 'scan_failed';
-  data: any;
-  timestamp: string;
+  type: 'connection_established' | 'connection_status' | 'echo' | 'subscription_confirmed' | 'unsubscription_confirmed' | 'pong' | 'error' | 'scan_update' | 'vulnerability_found' | 'system_status' | 'scan_completed' | 'scan_failed';
+  data?: any;
+  [key: string]: any;
 }
 
 export interface ScanUpdateData {
   scan_id: string;
   status: string;
-  progress: number;
-  current_phase: string;
+  progress?: number;
+  current_phase?: string;
   message?: string;
+  [key: string]: any;
 }
 
 export interface VulnerabilityFoundData {
@@ -19,8 +20,10 @@ export interface VulnerabilityFoundData {
   vulnerability: {
     title: string;
     severity: string;
-    description: string;
+    description?: string;
+    [key: string]: any;
   };
+  [key: string]: any;
 }
 
 class WebSocketService {
@@ -34,17 +37,15 @@ class WebSocketService {
   private isManualDisconnect = false;
   private isConnecting = false;
   private heartbeatInterval?: number; // Add heartbeat to maintain stable connection
+  private bootId: string | null = null;
 
   constructor() {
-    // Only connect if WebSocket is supported and we're not in test environment
     if (typeof WebSocket !== 'undefined' && typeof window !== 'undefined') {
-      // Don't auto-connect, let components request connection when needed
       console.log('WebSocket service initialized (optimized for stability)');
     }
   }
 
   public connect() {
-    // Prevent multiple simultaneous connection attempts
     if (this.isConnecting) {
       console.log('WebSocket connection already in progress');
       return;
@@ -60,19 +61,14 @@ class WebSocketService {
       return;
     }
 
-    // Set connecting flag
     this.isConnecting = true;
-
-    // Reset manual disconnect flag when explicitly connecting
     this.isManualDisconnect = false;
 
-    // Reset reconnect attempts when manually connecting
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.log('Resetting reconnection attempts for manual connect');
       this.reconnectAttempts = 0;
     }
 
-    // Don't try to connect if we've exceeded max attempts and this isn't a manual retry
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.warn('WebSocket: Max connection attempts reached. Call connect() manually to retry.');
       this.isConnecting = false;
@@ -97,19 +93,18 @@ class WebSocketService {
       this.connectionStatus = 'connected';
       this.reconnectAttempts = 0;
       this.isManualDisconnect = false;
-      this.isConnecting = false; // Clear connecting flag
-      this.startHeartbeat(); // Start heartbeat to maintain connection
+      this.isConnecting = false;
+      this.startHeartbeat();
       this.notifyStatusChange();
     };
 
     this.socket.onclose = (event) => {
       console.log(`WebSocket disconnected: ${event.code} ${event.reason || 'No reason'}`);
       this.connectionStatus = 'disconnected';
-      this.isConnecting = false; // Clear connecting flag
-      this.stopHeartbeat(); // Stop heartbeat on disconnect
+      this.isConnecting = false;
+      this.stopHeartbeat();
       this.notifyStatusChange();
       
-      // Only reconnect if it wasn't a manual close and we haven't exceeded attempts
       if (event.code !== 1000 && !this.isManualDisconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.scheduleReconnect();
       }
@@ -118,16 +113,23 @@ class WebSocketService {
     this.socket.onerror = (error) => {
       console.error('WebSocket connection error:', error);
       this.connectionStatus = 'error';
-      this.isConnecting = false; // Clear connecting flag
+      this.isConnecting = false;
       this.notifyStatusChange();
     };
 
     this.socket.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data);
+        const message: WebSocketMessage = JSON.parse(event.data);
         console.log('WebSocket message received:', message);
-        if (message.type && message.data) {
-          this.notifyListeners(message.type, message.data);
+        if (message && typeof message.type === 'string') {
+          if ((message as any).boot_id) {
+            this.bootId = (message as any).boot_id as string;
+          }
+          const payload = (message.data !== undefined) ? message.data : message;
+          this.notifyListeners(message.type, payload);
+          if (message.type === 'connection_status') {
+            this.notifyListeners('connection_boot', { boot_id: this.bootId });
+          }
         }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
@@ -149,10 +151,7 @@ class WebSocketService {
   }
 
   private startHeartbeat() {
-    // Clear existing heartbeat
     this.stopHeartbeat();
-    
-    // Send ping every 30 seconds to maintain connection
     this.heartbeatInterval = window.setInterval(() => {
       if (this.socket?.readyState === WebSocket.OPEN) {
         this.socket.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
@@ -183,6 +182,7 @@ class WebSocketService {
   private notifyStatusChange() {
     this.notifyListeners('connection_status', {
       status: this.connectionStatus,
+      boot_id: this.bootId,
       timestamp: new Date().toISOString()
     });
   }
@@ -194,7 +194,6 @@ class WebSocketService {
     }
     this.listeners.get(eventType)!.push(callback);
 
-    // Return unsubscribe function
     return () => {
       const typeListeners = this.listeners.get(eventType);
       if (typeListeners) {
@@ -228,7 +227,7 @@ class WebSocketService {
       this.socket.send(JSON.stringify({ type: 'subscribe_scan', scan_id: scanId }));
     }
     return this.subscribe('scan_update', (data: ScanUpdateData) => {
-      if (data.scan_id === scanId) {
+      if (data && (data as any).scan_id === scanId) {
         callback(data);
       }
     });
@@ -258,11 +257,15 @@ class WebSocketService {
     return this.connectionStatus === 'connected';
   }
 
+  getBootId() {
+    return this.bootId;
+  }
+
   // Cleanup
   public disconnect() {
     console.log('WebSocket: Manual disconnect requested');
     this.isManualDisconnect = true;
-    this.stopHeartbeat(); // Stop heartbeat on manual disconnect
+    this.stopHeartbeat();
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
     }
@@ -282,6 +285,5 @@ class WebSocketService {
   }
 }
 
-// Create singleton instance
 export const webSocketService = new WebSocketService();
 export default webSocketService; 

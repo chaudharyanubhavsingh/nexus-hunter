@@ -29,6 +29,35 @@ const debouncedRefetch = (key: string, refetchFn: () => void, delay: number = 50
   debounceMap.set(key, timeout);
 };
 
+// Activity persistence helpers (align with Dashboard)
+const getSessionId = (): string => {
+  let sid = sessionStorage.getItem('nexus_session_id');
+  if (!sid) {
+    sid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem('nexus_session_id', sid);
+  }
+  return sid;
+};
+
+const getActivityKey = (): string => `nexus_activity_feed_${getSessionId()}`;
+
+const pushActivity = (entry: any) => {
+  try {
+    const key = getActivityKey();
+    const raw = localStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    const next = [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toLocaleTimeString(),
+        ...entry,
+      },
+      ...Array.isArray(list) ? list : []
+    ].slice(0, 300);
+    localStorage.setItem(key, JSON.stringify(next));
+  } catch {}
+};
+
 // Targets hooks
 export const useTargets = () => {
   const { dispatch } = useAppContext();
@@ -63,6 +92,13 @@ export const useCreateTarget = () => {
       onSuccess: (newTarget) => {
         actions.addTarget(newTarget);
         queryClient.invalidateQueries(QUERY_KEYS.TARGETS);
+        pushActivity({
+          type: 'target_created',
+          message: `Target "${newTarget.name}" created`,
+          severity: 'success',
+          icon: 'Target',
+          payload: newTarget,
+        });
         toast.success(`Target "${newTarget.name}" created successfully`);
       },
       onError: (error: any) => {
@@ -85,6 +121,13 @@ export const useUpdateTarget = () => {
       onSuccess: (updatedTarget) => {
         actions.updateTarget(updatedTarget);
         queryClient.invalidateQueries(QUERY_KEYS.TARGETS);
+        pushActivity({
+          type: 'target_updated',
+          message: `Target "${updatedTarget.name}" updated`,
+          severity: 'info',
+          icon: 'Target',
+          payload: updatedTarget,
+        });
         toast.success(`Target "${updatedTarget.name}" updated successfully`);
       },
       onError: (error: any) => {
@@ -115,6 +158,13 @@ export const useDeleteTarget = () => {
           actions.removeTarget(id);
         }
         queryClient.invalidateQueries(QUERY_KEYS.TARGETS);
+        pushActivity({
+          type: isPermanent ? 'target_deleted' : 'target_deactivated',
+          message: isPermanent ? 'Target deleted permanently' : 'Target deactivated',
+          severity: isPermanent ? 'high' : 'info',
+          icon: 'Target',
+          payload: { id },
+        });
         toast.success(isPermanent ? 'Target deleted permanently' : 'Target deactivated');
       },
       onError: (error: any) => {
@@ -176,6 +226,13 @@ export const useCreateScan = () => {
       onSuccess: (newScan) => {
         actions.addScan(newScan);
         queryClient.invalidateQueries(QUERY_KEYS.SCANS);
+        pushActivity({
+          type: 'scan_created',
+          message: `Scan "${newScan.name}" started`,
+          severity: 'info',
+          icon: 'Activity',
+          payload: newScan,
+        });
         toast.success(`Scan "${newScan.name}" started successfully`);
       },
       onError: (error: any) => {
@@ -193,8 +250,15 @@ export const useCancelScan = () => {
   return useMutation(
     (scanId: string) => apiService.cancelScan(scanId),
     {
-      onSuccess: () => {
+      onSuccess: (_data, scanId) => {
         queryClient.invalidateQueries(QUERY_KEYS.SCANS);
+        pushActivity({
+          type: 'scan_cancelled',
+          message: `Scan ${scanId} cancelled`,
+          severity: 'high',
+          icon: 'Activity',
+          payload: { scanId },
+        });
         toast.success('Scan cancelled successfully');
       },
       onError: (error: any) => {
@@ -216,6 +280,13 @@ export const useDeleteScan = () => {
       onSuccess: (_, scanId) => {
         actions.removeScan(scanId);
         queryClient.invalidateQueries(QUERY_KEYS.SCANS);
+        pushActivity({
+          type: 'scan_deleted',
+          message: `Scan ${scanId} deleted`,
+          severity: 'high',
+          icon: 'Activity',
+          payload: { scanId },
+        });
         toast.success('Scan deleted successfully');
       },
       onError: (error: any) => {
@@ -275,7 +346,7 @@ export const useDownloadReport = () => {
     ({ scanId, reportType, format }: { scanId: string; reportType: string; format: string }) =>
       apiService.downloadReport(scanId, reportType, format),
     {
-      onSuccess: (blob, { reportType, format }) => {
+      onSuccess: (blob, { reportType, format, scanId }) => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -285,6 +356,13 @@ export const useDownloadReport = () => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
         
+        pushActivity({
+          type: 'report_downloaded',
+          message: `Downloaded ${reportType} report for scan ${scanId}`,
+          severity: 'success',
+          icon: 'File',
+          payload: { scanId, reportType, format },
+        });
         toast.success('Report downloaded successfully');
       },
       onError: (error: any) => {

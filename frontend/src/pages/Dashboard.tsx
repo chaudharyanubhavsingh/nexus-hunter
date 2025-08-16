@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
@@ -8,13 +8,54 @@ import {
   AlertTriangle, 
   Zap,
   TrendingUp,
-  Eye,
-  Brain
+  Eye
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { useDashboardData } from '../hooks/useApi'
 import AddTargetModal from '../components/AddTargetModal'
 import CreateScanModal from '../components/CreateScanModal'
+import webSocketService from '../services/websocket'
+
+// Activity icon resolver to handle persisted entries
+const resolveActivityIcon = (item: { icon?: any; iconKey?: string; type?: string; severity?: string }) => {
+  if (item.icon) return item.icon
+  const key = (item.iconKey || '').toLowerCase()
+  switch (key) {
+    case 'activity':
+    case 'scan':
+      return Activity
+    case 'target':
+      return Target
+    case 'shield':
+    case 'vulnerability':
+      return Shield
+    case 'alert':
+    case 'warning':
+      return AlertTriangle
+    case 'zap':
+      return Zap
+    case 'eye':
+      return Eye
+    default:
+      // fallback based on type
+      switch ((item.type || '').toLowerCase()) {
+        case 'scan_failed':
+          return AlertTriangle
+        case 'scan_completed':
+        case 'vulnerability_found':
+        case 'report_generated':
+          return Shield
+        case 'system_status':
+          return Zap
+        case 'scan_update':
+        default:
+          return Activity
+      }
+  }
+}
+
+// Persistent key across refresh; reset on backend boot change
+const getActivityKey = (): string => `nexus_activity_feed_persistent`
 
 export default function Dashboard() {
   const { state } = useAppContext()
@@ -25,43 +66,210 @@ export default function Dashboard() {
   const [isAddTargetModalOpen, setIsAddTargetModalOpen] = useState(false)
   const [isCreateScanModalOpen, setIsCreateScanModalOpen] = useState(false)
 
-  // Remove manual refetch calls - rely on query cache and WebSocket updates
-  // The excessive manual refetching was causing database noise
+  // Real-time activity feed
+  type ActivityItem = {
+    id: string
+    type: 'scan_started' | 'scan_update' | 'scan_completed' | 'scan_failed' | 'vulnerability_found' | 'system_status' | 'report_generated'
+    message: string
+    timestamp: string
+    severity: 'info' | 'success' | 'high' | 'critical'
+    icon?: any
+    iconKey?: string
+    payload?: any
+  }
 
-  const recentActivity = [
-    {
-      id: 1,
-      type: 'scan_completed',
-      message: 'Vulnerability scan completed for example.com',
-      timestamp: '2 minutes ago',
-      severity: 'high',
-      icon: Shield
-    },
-    {
-      id: 2,
-      type: 'vuln_found', 
-      message: 'SQL Injection vulnerability detected',
-      timestamp: '5 minutes ago',
-      severity: 'critical',
-      icon: AlertTriangle
-    },
-    {
-      id: 3,
-      type: 'scan_started',
-      message: 'Reconnaissance scan initiated for api.target.com',
-      timestamp: '12 minutes ago',
-      severity: 'info',
-      icon: Eye
-    },
-    {
-      id: 4,
-      type: 'report_generated',
-      message: 'Security assessment report generated',
-      timestamp: '25 minutes ago',
-      severity: 'success',
-      icon: Brain
+  const [activityFeed, setActivityFeed] = useState<ActivityItem[]>(() => {
+    try {
+      const cached = localStorage.getItem(getActivityKey())
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed)) return parsed
+      }
+    } catch {}
+    return []
+  })
+  const feedRef = useRef<HTMLDivElement | null>(null)
+
+  // persist feed to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem(getActivityKey(), JSON.stringify(activityFeed))
+    } catch {}
+  }, [activityFeed])
+
+  // reset activity on new websocket session (fresh LIVE session)
+  useEffect(() => {
+    const unsub = webSocketService.subscribe('connection_status', (payload: any) => {
+      if (payload?.boot_id) {
+        const lastBoot = localStorage.getItem('nexus_backend_boot_id')
+        if (lastBoot !== payload.boot_id) {
+          // Backend restarted → clear activity for a new session
+          setActivityFeed([])
+          try { localStorage.setItem(getActivityKey(), JSON.stringify([])) } catch {}
+          try { localStorage.setItem('nexus_backend_boot_id', payload.boot_id) } catch {}
+        }
+      }
+    })
+    return () => { if (unsub) unsub() }
+  }, [])
+
+  // sync from localStorage when other tabs/components update it
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === getActivityKey() && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue)
+          if (Array.isArray(parsed)) {
+            setActivityFeed(parsed)
+          }
+        } catch {}
+      }
     }
-  ]
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  // Subscribe to WebSocket events for live activity
+  useEffect(() => {
+    const unsubscribers: Array<() => void> = []
+
+    const addItem = (item: ActivityItem) => {
+      setActivityFeed((prev) => {
+        const next = [item, ...prev]
+        return next.slice(0, 300) // cap to 300 items
+      })
+    }
+
+    const nowTs = () => new Date().toLocaleTimeString()
+
+    if (!webSocketService.isConnected()) {
+      webSocketService.connect()
+    }
+
+    // scan_update (running/progress/cancelled)
+    unsubscribers.push(
+      webSocketService.subscribe('scan_update', (data: any) => {
+        const status = data?.status
+        const progress = typeof data?.progress === 'number' ? ` (${data.progress}%)` : ''
+        const message = status === 'cancelled'
+          ? `Scan ${data?.scan_id} cancelled`
+          : `Scan ${data?.scan_id} ${status}${progress}`
+        addItem({
+          id: `${data?.scan_id}-${Date.now()}`,
+          type: 'scan_update',
+          message,
+          timestamp: nowTs(),
+          severity: status === 'cancelled' ? 'high' : 'info',
+          iconKey: 'activity',
+          payload: data
+        })
+      })
+    )
+
+    // scan_completed (also derive vulnerabilities and report generation entries)
+    unsubscribers.push(
+      webSocketService.subscribe('scan_completed', (data: any) => {
+        addItem({
+          id: `${data?.scan_id}-${Date.now()}`,
+          type: 'scan_completed',
+          message: `Scan ${data?.scan_id} completed`,
+          timestamp: nowTs(),
+          severity: 'success',
+          iconKey: 'shield',
+          payload: data
+        })
+
+        // Derive vulnerabilities
+        try {
+          const results = data?.results || {}
+          const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : []
+          if (vulns.length > 0) {
+            vulns.slice(0, 20).forEach((v: any, idx: number) => {
+              const sev = (v?.severity || 'info').toLowerCase()
+              addItem({
+                id: `${data?.scan_id}-vuln-${idx}-${Date.now()}`,
+                type: 'vulnerability_found',
+                message: `${v?.title || 'Vulnerability'} (Severity: ${v?.severity || 'info'})`,
+                timestamp: nowTs(),
+                severity: sev === 'critical' ? 'critical' : sev === 'high' ? 'high' : sev === 'medium' ? 'high' : 'info',
+                iconKey: 'shield',
+                payload: { scan_id: data?.scan_id, vulnerability: v }
+              })
+            })
+          }
+        } catch {}
+
+        // Report generation marker
+        addItem({
+          id: `${data?.scan_id}-report-${Date.now()}`,
+          type: 'report_generated',
+          message: `Reports generated for scan ${data?.scan_id}`,
+          timestamp: nowTs(),
+          severity: 'success',
+          iconKey: 'shield',
+          payload: { scan_id: data?.scan_id }
+        })
+      })
+    )
+
+    // scan_failed
+    unsubscribers.push(
+      webSocketService.subscribe('scan_failed', (data: any) => {
+        addItem({
+          id: `${data?.scan_id}-${Date.now()}`,
+          type: 'scan_failed',
+          message: `Scan ${data?.scan_id} failed`,
+          timestamp: nowTs(),
+          severity: 'critical',
+          iconKey: 'alert',
+          payload: data
+        })
+      })
+    )
+
+    // vulnerability_found
+    unsubscribers.push(
+      webSocketService.subscribe('vulnerability_found', (data: any) => {
+        const title = data?.vulnerability?.title || 'Vulnerability found'
+        const severity = (data?.vulnerability?.severity || 'info').toLowerCase()
+        addItem({
+          id: `${data?.scan_id}-${Date.now()}`,
+          type: 'vulnerability_found',
+          message: `${title} (Scan ${data?.scan_id})`,
+          timestamp: nowTs(),
+          severity: severity === 'critical' ? 'critical' : severity === 'high' ? 'high' : 'info',
+          iconKey: 'shield',
+          payload: data
+        })
+      })
+    )
+
+    // system_status (optional)
+    unsubscribers.push(
+      webSocketService.subscribe('system_status', (data: any) => {
+        addItem({
+          id: `system-${Date.now()}`,
+          type: 'system_status',
+          message: 'System status update received',
+          timestamp: nowTs(),
+          severity: 'info',
+        iconKey: 'zap',
+          payload: data
+        })
+      })
+    )
+
+    return () => {
+      unsubscribers.forEach((u) => u && u())
+    }
+  }, [])
+
+  // Auto-scroll to top on new item (visual polish for LIVE feel)
+  useEffect(() => {
+    if (feedRef.current) {
+      feedRef.current.scrollTop = 0
+    }
+  }, [activityFeed])
 
   // Update stats with real data
   const currentStats = [
@@ -138,14 +346,16 @@ export default function Dashboard() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          <Zap size={16} className="text-primary animate-pulse" />
-          <span className="text-primary font-mono">NEXUS PROTOCOL ACTIVE</span>
+          <Zap size={16} className={state.wsConnectionStatus === 'connected' ? 'text-primary animate-pulse' : 'text-cyber-muted'} />
+          <span className={state.wsConnectionStatus === 'connected' ? 'text-primary font-mono' : 'text-cyber-muted font-mono'}>
+            {state.wsConnectionStatus === 'connected' ? 'NEXUS PROTOCOL ACTIVE' : 'OFFLINE'}
+          </span>
         </motion.div>
       </motion.div>
 
       {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {currentStats.map((stat, index) => {
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {currentStats.map((stat, index) => {
           const Icon = stat.icon
           
           return (
@@ -195,21 +405,24 @@ export default function Dashboard() {
               REAL-TIME ACTIVITY
             </h2>
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
-              <span className="text-xs text-cyber-muted font-mono">LIVE</span>
+              <div className={`w-2 h-2 rounded-full ${state.wsConnectionStatus === 'connected' ? 'bg-success animate-pulse' : 'bg-cyber-light'}`} />
+              <span className="text-xs text-cyber-muted font-mono">{state.wsConnectionStatus === 'connected' ? 'LIVE' : 'OFFLINE'}</span>
             </div>
           </div>
           
-          <div className="space-y-4 max-h-96 overflow-y-auto scrollbar-cyber">
-            {recentActivity.map((activity, index) => {
-              const Icon = activity.icon
+          <div ref={feedRef} className="space-y-4 max-h-96 overflow-y-auto scrollbar-cyber">
+            {activityFeed.length === 0 && (
+              <div className="text-xs text-cyber-muted font-mono">No activity yet. Start a scan to see live updates.</div>
+            )}
+            {activityFeed.map((activity, index) => {
+              const Icon = resolveActivityIcon(activity)
               
               return (
                 <motion.div
                   key={activity.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
                   className="flex items-start space-x-3 p-3 rounded border border-cyber-light/20 hover:border-primary/30 transition-colors"
                 >
                   <div className={`

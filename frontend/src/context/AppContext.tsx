@@ -270,12 +270,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
     });
 
+    // When a vulnerability is found, refresh vulnerabilities list
+    const unsubscribeVulnFound = webSocketService.subscribe('vulnerability_found', (_message) => {
+      queryClient.invalidateQueries('vulnerabilities');
+    });
+
     // Cleanup subscriptions on unmount
     return () => {
       unsubscribeStatusChange();
       unsubscribeScanUpdate();
       unsubscribeScanCompleted();
       unsubscribeScanFailed();
+      unsubscribeVulnFound();
       // Note: We don't disconnect WebSocket here as it should persist across route changes
     };
   }, [queryClient]);

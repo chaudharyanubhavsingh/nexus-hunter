@@ -110,12 +110,15 @@ class WebSocketManager:
     """Global WebSocket manager"""
     
     manager: ConnectionManager = None
+    boot_id: str = None
     
     @classmethod
     def initialize(cls):
         """Initialize the WebSocket manager"""
         cls.manager = ConnectionManager()
+        cls.boot_id = str(uuid4())
         logger.info("🌐 WebSocket manager initialized")
+        logger.info(f"🆔 WebSocket boot_id: {cls.boot_id}")
     
     @classmethod
     async def broadcast_to_all(cls, message: dict, exclude_client: str = None):
@@ -163,4 +166,8 @@ class WebSocketManager:
             "timestamp": None,
         }
         
-        await cls.manager.broadcast_to_all(message) 
+        await cls.manager.broadcast_to_all(message)
+    
+    @classmethod
+    def get_boot_id(cls) -> str:
+        return cls.boot_id 
