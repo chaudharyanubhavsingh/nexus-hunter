@@ -33,7 +33,9 @@ export interface Target {
   id: string;
   name: string;
   domain: string;
-  scope: string;
+  description?: string;
+  scope?: string[];
+  out_of_scope?: string[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -43,9 +45,9 @@ export interface Scan {
   id: string;
   name: string;
   target_id: string;
-  type: 'recon' | 'vulnerability' | 'full';
+  scan_type: 'reconnaissance' | 'vulnerability' | 'full'; // Match backend ScanType enum
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  progress: number;
+  progress_percentage: number; // Match backend field name
   config: any;
   results: any;
   created_at: string;
@@ -74,7 +76,9 @@ export interface Vulnerability {
 export interface CreateTargetRequest {
   name: string;
   domain: string;
-  scope: string;
+  description?: string;
+  scope?: string[];
+  out_of_scope?: string[];
 }
 
 export interface CreateScanRequest {
@@ -88,7 +92,7 @@ export interface CreateScanRequest {
 class ApiService {
   // Targets
   async getTargets(): Promise<Target[]> {
-    const response = await api.get('/api/targets/');
+    const response = await api.get('/api/targets/', { params: { active_only: false } });
     return response.data.targets || [];
   }
 
@@ -107,8 +111,8 @@ class ApiService {
     return response.data;
   }
 
-  async deleteTarget(id: string): Promise<void> {
-    await api.delete(`/api/targets/${id}`);
+  async deleteTarget(id: string, permanent: boolean = false): Promise<void> {
+    await api.delete(`/api/targets/${id}`, { params: { permanent } });
   }
 
   // Scans
@@ -123,12 +127,33 @@ class ApiService {
   }
 
   async createScan(data: CreateScanRequest): Promise<Scan> {
-    const response = await api.post('/api/scans/', data);
+    // Map frontend scan types to backend ScanType enum values
+    const scanTypeMapping = {
+      'recon': 'reconnaissance',
+      'vulnerability': 'vulnerability', 
+      'full': 'full'
+    };
+
+    // Transform frontend format to backend format
+    const backendData = {
+      name: data.name,
+      target_id: data.target_id,
+      scan_type: scanTypeMapping[data.type as keyof typeof scanTypeMapping], // Map scan type
+      config: data.config
+    };
+    
+    const response = await api.post('/api/scans/', backendData);
     return response.data;
   }
 
-  async cancelScan(id: string): Promise<void> {
-    await api.post(`/api/scans/${id}/cancel`);
+  async cancelScan(scanId: string): Promise<void> {
+    const response = await api.post(`/api/scans/${scanId}/cancel`);
+    return response.data;
+  }
+
+  async deleteScan(scanId: string): Promise<void> {
+    const response = await api.delete(`/api/scans/${scanId}`);
+    return response.data;
   }
 
   async getScanProgress(id: string): Promise<{ progress: number; status: string; current_phase: string }> {
@@ -181,10 +206,10 @@ class ApiService {
     return response.data;
   }
 
-  async downloadReport(scanId: string, reportType: string, format: string): Promise<Blob> {
-    const response = await api.get(`/api/reports/${scanId}/download`, {
-      params: { report_type: reportType, format },
-      responseType: 'blob'
+  async downloadReport(scanId: string, reportType: string, format: string = 'pdf'): Promise<Blob> {
+    const response = await api.get(`/api/reports/${scanId}/download/${reportType}`, {
+      responseType: 'blob',
+      params: { format }
     });
     return response.data;
   }

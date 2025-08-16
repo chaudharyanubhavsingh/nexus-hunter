@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Settings as SettingsIcon, Shield, Bell, Database, Key, Save } from 'lucide-react';
 
@@ -12,8 +12,66 @@ const Settings: React.FC = () => {
     retentionDays: 30
   });
 
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Load current timeout from backend on component mount
+  useEffect(() => {
+    loadCurrentSettings();
+  }, []);
+
+  const loadCurrentSettings = async () => {
+    try {
+      const response = await fetch('/api/scans/system-status');
+      if (response.ok) {
+        const data = await response.json();
+        setSettings(prev => ({
+          ...prev,
+          scanTimeout: data.stuck_scan_monitor.current_timeout,
+          notifications: data.notification_system.enabled,
+          autoScan: data.auto_scan_scheduler.enabled,
+          concurrentScans: data.concurrent_scan_manager.max_concurrent_scans
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load current settings:', error);
+    }
+  };
+
   const updateSetting = (key: string, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveSettings = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/scans/update-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scan_timeout: settings.scanTimeout,
+          notifications: settings.notifications,
+          auto_scan: settings.autoScan,
+          concurrent_scans: settings.concurrentScans
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Settings updated:', result);
+        
+        // Silent success: refresh current settings to reflect persisted state
+        loadCurrentSettings();
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to save settings');
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -36,10 +94,16 @@ const Settings: React.FC = () => {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="bg-neon-green bg-opacity-20 border border-neon-green text-neon-green px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-opacity-30 transition-all"
+            onClick={saveSettings}
+            disabled={isLoading}
+            className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-all ${
+              isLoading 
+                ? 'bg-cyber-gray bg-opacity-20 border border-cyber-gray text-cyber-gray cursor-not-allowed'
+                : 'bg-neon-green bg-opacity-20 border border-neon-green text-neon-green hover:bg-opacity-30'
+            }`}
           >
             <Save size={20} />
-            SAVE CHANGES
+            {isLoading ? 'SAVING...' : 'SAVE CHANGES'}
           </motion.button>
         </div>
       </motion.div>
@@ -117,7 +181,9 @@ const Settings: React.FC = () => {
                 min="300"
                 max="7200"
               />
-              <p className="text-cyber-muted text-sm mt-1">Maximum time allowed for each scan</p>
+              <p className="text-cyber-muted text-sm mt-1">
+                Maximum time allowed for each scan. Updates are applied immediately to running monitor.
+              </p>
             </div>
           </div>
         </motion.div>

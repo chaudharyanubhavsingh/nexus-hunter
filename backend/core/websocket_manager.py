@@ -51,7 +51,7 @@ class ConnectionManager:
                 logger.error(f"Failed to send message to {client_id}: {e}")
                 self.disconnect(client_id)
     
-    async def broadcast(self, message: dict, exclude_client: str = None):
+    async def broadcast_to_all(self, message: dict, exclude_client: str = None):
         """Broadcast a message to all connected clients"""
         message_text = json.dumps(message)
         disconnected_clients = []
@@ -69,6 +69,10 @@ class ConnectionManager:
         # Clean up disconnected clients
         for client_id in disconnected_clients:
             self.disconnect(client_id)
+    
+    async def broadcast(self, message: dict, exclude_client: str = None):
+        """Backward compatibility alias for broadcast_to_all"""
+        await self.broadcast_to_all(message, exclude_client)
     
     async def send_to_subscription(self, message: dict, subscription: str):
         """Send message to clients subscribed to a specific topic"""
@@ -114,6 +118,17 @@ class WebSocketManager:
         logger.info("🌐 WebSocket manager initialized")
     
     @classmethod
+    async def broadcast_to_all(cls, message: dict, exclude_client: str = None):
+        """Broadcast to all connected clients"""
+        if cls.manager:
+            await cls.manager.broadcast_to_all(message, exclude_client)
+    
+    @classmethod  
+    async def broadcast(cls, message: dict, exclude_client: str = None):
+        """Backward compatibility alias"""
+        await cls.broadcast_to_all(message, exclude_client)
+    
+    @classmethod
     async def broadcast_scan_update(cls, scan_id: str, status: str, data: dict = None):
         """Broadcast scan status update"""
         message = {
@@ -148,4 +163,4 @@ class WebSocketManager:
             "timestamp": None,
         }
         
-        await cls.manager.broadcast(message) 
+        await cls.manager.broadcast_to_all(message) 

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 
 import WebSocketStatus from './WebSocketStatus'
+import NotificationCenter from './NotificationCenter'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -99,6 +100,7 @@ export default function Layout({ children }: LayoutProps) {
             </div>
             
             <div className="flex items-center space-x-4">
+              <NotificationCenter />
               <WebSocketStatus />
               
               <motion.div 

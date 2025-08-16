@@ -1,22 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Pause, Square, Search, Filter, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Play, Search, Square, Clock, AlertTriangle, Filter, CheckCircle, XCircle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { useScans, useCancelScan } from '../hooks/useApi';
+import { useScans, useCreateScan, useCancelScan, useDeleteScan } from '../hooks/useApi';
 import CreateScanModal from '../components/CreateScanModal';
+import { Scan } from '../services/api';
 
 const Scans: React.FC = () => {
   const { state } = useAppContext();
   const scansQuery = useScans();
+  const createScanMutation = useCreateScan();
   const cancelScanMutation = useCancelScan();
+  const deleteScanMutation = useDeleteScan();
+  
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // Ensure data is loaded and refreshed
-  React.useEffect(() => {
-    if (scansQuery.refetch) {
-      scansQuery.refetch();
+  // Remove redundant refetch on mount - rely on query cache and WebSocket updates
+  // The excessive refetching was causing database noise
+
+  // Optimized polling for active scans only
+  useEffect(() => {
+    const hasActiveScans = state.scans.some(scan => 
+      scan.status === 'running' || scan.status === 'pending'
+    );
+
+    if (hasActiveScans) {
+      // Use longer interval and only for active scans
+      const interval = setInterval(() => {
+        scansQuery.refetch();
+      }, 60000); // Increased to 60 seconds
+
+      return () => clearInterval(interval);
     }
-  }, []);
+  }, [state.scans, scansQuery]);
 
   const handleCancelScan = async (scanId: string, scanName: string) => {
     if (window.confirm(`Are you sure you want to cancel "${scanName}"?`)) {
@@ -28,13 +44,54 @@ const Scans: React.FC = () => {
     }
   };
 
+  const handleDeleteScan = async (scanId: string, scanName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${scanName}"? This action cannot be undone.`)) {
+      try {
+        await deleteScanMutation.mutateAsync(scanId);
+      } catch (error) {
+        // Error handling is done in the mutation
+      }
+    }
+  };
+
+  const handleRetryScan = async (scan: Scan) => {
+    try {
+      const mapBack: Record<Scan['scan_type'], 'recon' | 'vulnerability' | 'full'> = {
+        reconnaissance: 'recon',
+        vulnerability: 'vulnerability',
+        full: 'full',
+      };
+      const retryData = {
+        name: `${scan.name} (Retry)`,
+        target_id: scan.target_id,
+        type: mapBack[scan.scan_type],
+        config: scan.config || {},
+      } as const;
+      await createScanMutation.mutateAsync(retryData);
+    } catch (error) {
+      // Error handling is done in the mutation
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'running': return 'neon-cyan';
-      case 'completed': return 'neon-green';
-      case 'failed': return 'neon-orange';
-      case 'queued': return 'cyber-gray';
-      default: return 'cyber-gray';
+      case 'running': return 'bg-neon-cyan bg-opacity-20 text-neon-cyan';
+      case 'completed': return 'bg-neon-green bg-opacity-20 text-neon-green';
+      case 'failed': return 'bg-neon-orange bg-opacity-20 text-neon-orange';
+      case 'cancelled': return 'bg-neon-red bg-opacity-20 text-neon-red';
+      case 'pending': return 'bg-cyber-gray bg-opacity-20 text-cyber-gray';
+      default: return 'bg-cyber-gray bg-opacity-20 text-cyber-gray';
+    }
+  };
+
+  const getStatusTextColor = (status: string) => {
+    switch (status) {
+      case 'running': return 'text-neon-cyan';
+      case 'completed': return 'text-neon-green';
+      case 'failed': return 'text-neon-orange';
+      case 'cancelled': return 'text-neon-red';
+      case 'pending': return 'text-cyber-gray';
+      default: return 'text-cyber-gray';
     }
   };
 
@@ -43,7 +100,8 @@ const Scans: React.FC = () => {
       case 'running': return Play;
       case 'completed': return CheckCircle;
       case 'failed': return AlertTriangle;
-      case 'queued': return Clock;
+      case 'cancelled': return XCircle;
+      case 'pending': return Clock;
       default: return Clock;
     }
   };
@@ -103,9 +161,18 @@ const Scans: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         {[
           { label: 'Active Scans', value: state.stats.activeScans.toString(), icon: Play, color: 'neon-cyan' },
-          { label: 'Completed Today', value: state.scans.filter(s => s.status === 'completed').length.toString(), icon: CheckCircle, color: 'neon-green' },
-          { label: 'Total Findings', value: state.stats.totalVulnerabilities.toString(), icon: Search, color: 'neon-pink' },
-          { label: 'Critical Issues', value: state.stats.criticalVulnerabilities.toString(), icon: AlertTriangle, color: 'neon-orange' }
+          { label: 'Total Completed', value: state.scans.filter(s => s.status === 'completed').length.toString(), icon: CheckCircle, color: 'neon-green' },
+          { label: 'Total Findings', value: state.scans.filter(s => s.status === 'completed' && s.results).reduce((sum, s) => {
+            const results = typeof s.results === 'string' ? JSON.parse(s.results) : s.results;
+            const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : [];
+            return sum + (vulns.length > 0 ? vulns.length : 0);
+          }, 0).toString(), icon: Search, color: 'neon-pink' },
+          { label: 'Critical Issues', value: state.scans.filter(s => s.status === 'completed' && s.results).reduce((sum, s) => {
+            const results = typeof s.results === 'string' ? JSON.parse(s.results) : s.results;
+            const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : [];
+            const criticalCount = vulns.length > 0 ? vulns.filter((v: any) => v.severity === 'critical').length : 0;
+            return sum + criticalCount;
+          }, 0).toString(), icon: AlertTriangle, color: 'neon-orange' }
         ].map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -146,7 +213,6 @@ const Scans: React.FC = () => {
                 <th className="text-left p-4 text-cyber-muted">Target</th>
                 <th className="text-left p-4 text-cyber-muted">Type</th>
                 <th className="text-left p-4 text-cyber-muted">Status</th>
-                <th className="text-left p-4 text-cyber-muted">Progress</th>
                 <th className="text-left p-4 text-cyber-muted">Findings</th>
                 <th className="text-left p-4 text-cyber-muted">Duration</th>
                 <th className="text-left p-4 text-cyber-muted">Actions</th>
@@ -155,6 +221,78 @@ const Scans: React.FC = () => {
             <tbody>
               {state.scans.map((scan, index) => {
                 const StatusIcon = getStatusIcon(scan.status);
+                
+                // Fixed duration calculation with proper ISO timestamp parsing
+                const calculateDuration = () => {
+                  try {
+                    // For completed scans: use completed_at - started_at
+                    if (scan.status === 'completed' && scan.completed_at && scan.started_at) {
+                      // Handle ISO timestamps properly (remove Z suffix if present)
+                      const startTimeStr = typeof scan.started_at === 'string' 
+                        ? scan.started_at.replace('Z', '') 
+                        : scan.started_at;
+                      const endTimeStr = typeof scan.completed_at === 'string'
+                        ? scan.completed_at.replace('Z', '')
+                        : scan.completed_at;
+                        
+                      const startTime = new Date(startTimeStr).getTime();
+                      const endTime = new Date(endTimeStr).getTime();
+                      
+                      // Debug logging for troubleshooting
+                      if (scan.id === '214a8f0f-eb44-466c-aa66-d902c39dd0f4') {
+                        console.log('Duration Debug for specific scan:', {
+                          startTimeStr, endTimeStr, startTime, endTime, 
+                          duration: (endTime - startTime) / 1000
+                        });
+                      }
+                      
+                      const duration = Math.round((endTime - startTime) / 1000);
+                      return Math.max(0, duration); // Ensure non-negative
+                    }
+                    
+                    // For running/pending scans: use now - started_at  
+                    if ((scan.status === 'running' || scan.status === 'pending') && scan.started_at) {
+                      const startTimeStr = typeof scan.started_at === 'string' 
+                        ? scan.started_at.replace('Z', '') 
+                        : scan.started_at;
+                      const startTime = new Date(startTimeStr).getTime();
+                      const duration = Math.round((Date.now() - startTime) / 1000);
+                      return Math.max(0, Math.min(duration, 86400)); // Cap at 24 hours
+                    }
+                    
+                    // Fallback for scans without proper started_at
+                    if ((scan.status === 'running' || scan.status === 'pending') && scan.created_at) {
+                      const createdTime = new Date(scan.created_at).getTime();
+                      const duration = Math.round((Date.now() - createdTime) / 1000);
+                      // Only use if reasonable (less than 2 hours)
+                      return duration < 7200 ? Math.max(0, duration) : 0;
+                    }
+                    
+                    // For completed scans without proper timestamps, try created_at to updated_at
+                    if (scan.status === 'completed' && scan.created_at && scan.updated_at) {
+                      const startTime = new Date(scan.created_at).getTime();
+                      const endTime = new Date(scan.updated_at).getTime();
+                      const duration = Math.round((endTime - startTime) / 1000);
+                      return duration > 0 && duration < 86400 ? duration : 0; // Reasonable range
+                    }
+                    
+                    return 0; // Default fallback
+                  } catch (error) {
+                    console.warn('Duration calculation error for scan:', scan.id, error);
+                    return 0; // Return 0 instead of -1 to show "0s"
+                  }
+                };
+                
+                const duration = calculateDuration();
+                
+                const formatDuration = (seconds: number) => {
+                  if (seconds === 0) return '0s';
+                  if (seconds < 60) return `${seconds}s`;
+                  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+                  if (seconds < 86400) return `${Math.round(seconds / 3600)}h`;
+                  return `${Math.round(seconds / 86400)}d`;
+                };
+
                 return (
                   <motion.tr
                     key={scan.id}
@@ -163,64 +301,98 @@ const Scans: React.FC = () => {
                     transition={{ delay: 0.5 + index * 0.1 }}
                     className="border-b border-cyber-gray border-opacity-20 hover:bg-cyber-gray hover:bg-opacity-5"
                   >
+                    {/* 1. Scan Name */}
                     <td className="p-4">
                       <div className="font-medium text-cyber-white">{scan.name}</div>
                       <div className="text-xs text-cyber-muted font-mono">{scan.id}</div>
                     </td>
-                                          <td className="p-4">
-                        <div className="text-neon-cyan font-mono">
-                          {state.targets.find(t => t.id === scan.target_id)?.domain || scan.target_id}
-                        </div>
-                      </td>
+                    
+                    {/* 2. Target */}
                     <td className="p-4">
-                      <span className="px-2 py-1 bg-neon-pink bg-opacity-20 text-neon-pink rounded text-xs font-bold">
-                        {scan.type.toUpperCase()}
+                      <div className="text-neon-cyan font-mono">
+                        {state.targets.find(t => t.id === scan.target_id)?.domain || 'Unknown'}
+                      </div>
+                    </td>
+                    
+                    {/* 3. Type */}
+                    <td className="p-4">
+                      <span className="text-xs font-bold text-neon-green">
+                        {scan.scan_type.toUpperCase()}
                       </span>
                     </td>
+                    
+                    {/* 4. Status (with Progress when running) */}
                     <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <StatusIcon className={`text-${getStatusColor(scan.status)}`} size={16} />
-                        <span className={`text-${getStatusColor(scan.status)} text-sm font-medium`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <StatusIcon size={16} className={getStatusTextColor(scan.status)} />
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${getStatusColor(scan.status)}`}>
                           {scan.status.toUpperCase()}
                         </span>
                       </div>
+                      
+                      {/* Progress bar only for running/pending scans */}
+                      {(scan.status === 'running' || scan.status === 'pending') && (
+                        <div className="w-full">
+                          <div className="flex justify-between text-xs text-cyber-muted mb-1">
+                            <span>Progress</span>
+                            <span>{Math.min(scan.progress_percentage || 0, 99)}%</span>
+                          </div>
+                          <div className="w-full bg-cyber-gray bg-opacity-20 rounded-full h-2">
+                            <motion.div
+                              className="bg-gradient-to-r from-neon-cyan to-neon-green h-2 rounded-full"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${Math.min(scan.progress_percentage || 0, 99)}%` }}
+                              transition={{ duration: 0.3 }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </td>
-                    <td className="p-4">
-                      <div className="w-full bg-cyber-gray bg-opacity-30 rounded-full h-2">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${scan.progress}%` }}
-                          transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
-                          className={`h-2 rounded-full bg-${getStatusColor(scan.status)}`}
-                        />
-                      </div>
-                      <div className="text-xs text-cyber-muted mt-1">{scan.progress}%</div>
-                    </td>
+                    
+                    {/* 5. Findings */}
                     <td className="p-4">
                       <div className="flex flex-col">
-                        <span className="text-cyber-white font-medium">
-                          {scan.results?.vulnerabilities?.length || 0}
-                        </span>
-                        {scan.results?.vulnerabilities?.some((v: any) => v.severity === 'critical') && (
-                          <span className="text-neon-orange text-xs">
-                            {scan.results.vulnerabilities.filter((v: any) => v.severity === 'critical').length} critical
-                          </span>
-                        )}
+                        {(() => {
+                          // Handle both object and string results for individual scans
+                          const results = scan.results ? (typeof scan.results === 'string' ? JSON.parse(scan.results) : scan.results) : null;
+                          const vulns = results?.vulnerabilities || [];
+                          const totalFindings = Array.isArray(vulns) ? vulns.length : 0;
+                          const criticalCount = Array.isArray(vulns) ? vulns.filter((v: any) => v.severity === 'critical').length : 0;
+                          
+                          return (
+                            <>
+                              <span className="text-cyber-white font-medium">
+                                {totalFindings}
+                              </span>
+                              {criticalCount > 0 && (
+                                <span className="text-neon-orange text-xs">
+                                  {criticalCount} critical
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
+                    
+                    {/* 6. Duration */}
                     <td className="p-4">
                       <div className="text-cyber-muted text-sm">
-                        {scan.completed_at ? (
-                          <>
-                            {Math.round((new Date(scan.completed_at).getTime() - new Date(scan.created_at).getTime()) / 60000)}m
-                          </>
+                        {scan.status === 'completed' ? (
+                          <span className="text-cyber-white">{formatDuration(duration)}</span>
+                        ) : scan.status === 'running' || scan.status === 'pending' ? (
+                          <span className="text-neon-cyan">{formatDuration(duration)}</span>
+                        ) : scan.status === 'failed' ? (
+                          <span className="text-neon-red">--</span>
+                        ) : scan.status === 'cancelled' ? (
+                          <span className="text-neon-orange">--</span>
                         ) : (
-                          <>
-                            {Math.round((Date.now() - new Date(scan.created_at).getTime()) / 60000)}m
-                          </>
+                          <span className="text-cyber-muted">--</span>
                         )}
                       </div>
                     </td>
+                    
+                    {/* 7. Actions */}
                     <td className="p-4">
                       <div className="flex gap-2">
                         {scan.status === 'running' || scan.status === 'pending' ? (
@@ -232,13 +404,55 @@ const Scans: React.FC = () => {
                           >
                             <Square size={16} />
                           </button>
-                        ) : (
+                        ) : scan.status === 'completed' ? (
                           <button 
                             onClick={() => window.location.href = `/scans/${scan.id}`}
                             className="text-neon-green hover:text-cyber-white transition-colors"
                             title="View Details"
                           >
                             <Search size={16} />
+                          </button>
+                        ) : scan.status === 'failed' ? (
+                          <>
+                            <button 
+                              onClick={() => handleRetryScan(scan)}
+                              className="text-neon-cyan hover:text-cyber-white transition-colors"
+                              title="Retry Scan"
+                            >
+                              <Play size={16} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteScan(scan.id, scan.name)}
+                              className="text-neon-red hover:text-cyber-white transition-colors"
+                              title="Delete Scan"
+                            >
+                              <AlertTriangle size={16} />
+                            </button>
+                          </>
+                        ) : scan.status === 'cancelled' ? (
+                          <>
+                            <button 
+                              onClick={() => handleRetryScan(scan)}
+                              className="text-neon-cyan hover:text-cyber-white transition-colors"
+                              title="Retry Scan"
+                            >
+                              <Play size={16} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteScan(scan.id, scan.name)}
+                              className="text-neon-red hover:text-cyber-white transition-colors"
+                              title="Delete Scan"
+                            >
+                              <AlertTriangle size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <button 
+                            disabled={true}
+                            className="text-cyber-muted opacity-50"
+                            title="No actions available"
+                          >
+                            <AlertTriangle size={16} />
                           </button>
                         )}
                       </div>

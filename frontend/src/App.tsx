@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Targets from './pages/Targets'
 import Scans from './pages/Scans'
 import ScanDetails from './pages/ScanDetails'
+import ScheduledScans from './pages/ScheduledScans'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 
@@ -46,14 +47,15 @@ function App() {
       </div>
       
       <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/targets" element={<Targets />} />
-          <Route path="/scans" element={<Scans />} />
-          <Route path="/scans/:scanId" element={<ScanDetails />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
+                    <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/targets" element={<Targets />} />
+              <Route path="/scans" element={<Scans />} />
+              <Route path="/scans/:scanId" element={<ScanDetails />} />
+              <Route path="/scheduled-scans" element={<ScheduledScans />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
       </Layout>
     </div>
   )

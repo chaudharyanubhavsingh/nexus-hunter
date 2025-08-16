@@ -18,6 +18,10 @@ from core.database import Database
 from core.redis_client import RedisClient
 from api.routes import api_router
 from core.websocket_manager import WebSocketManager
+from core.stuck_scan_monitor import stuck_scan_monitor
+from core.notification_system import notification_system
+from core.auto_scan_scheduler import auto_scan_scheduler
+from core.concurrent_scan_manager import concurrent_scan_manager
 
 
 @asynccontextmanager
@@ -41,10 +45,37 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     WebSocketManager.initialize()
     logger.info("✅ WebSocket manager initialized")
     
+    # Start intelligent stuck scan monitor
+    await stuck_scan_monitor.start_monitoring()
+    logger.info("✅ Stuck scan monitor started")
+    
+    # Initialize notification system
+    await notification_system.enable_notifications(True)
+    logger.info("✅ Notification system initialized")
+    
+    # Start auto-scan scheduler (disabled by default)
+    await auto_scan_scheduler.start_scheduler()
+    logger.info("✅ Auto-scan scheduler initialized")
+    
+    # Send startup notification
+    await notification_system.notify_system_alert(
+        "System Started",
+        "Nexus Hunter has started successfully",
+    )
+    
     yield
     
     # Cleanup
     logger.info("🔄 Nexus Hunter shutting down...")
+    
+    # Send shutdown notification
+    await notification_system.notify_system_alert(
+        "System Shutdown",
+        "Nexus Hunter is shutting down",
+    )
+    
+    await stuck_scan_monitor.stop_monitoring()
+    await auto_scan_scheduler.stop_scheduler()
     await Database.disconnect()
     await RedisClient.disconnect()
     logger.info("✅ Cleanup completed")

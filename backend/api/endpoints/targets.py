@@ -216,9 +216,14 @@ async def update_target(
 @router.delete("/{target_id}")
 async def delete_target(
     target_id: UUID,
+    permanent: bool = False,
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Delete a target (soft delete by setting is_active to False)"""
+    """Delete a target.
+    - Soft delete by default (sets is_active = False)
+    - If permanent=True, delete target and all related scans
+    - If target is already inactive and permanent not specified, perform permanent delete automatically
+    """
     try:
         # Get existing target
         query = select(Target).where(Target.id == target_id)
@@ -228,14 +233,25 @@ async def delete_target(
         if not target:
             raise HTTPException(status_code=404, detail="Target not found")
         
-        # Soft delete by setting is_active to False
-        target.is_active = False
-        await db.commit()
+        # Auto-upgrade to permanent delete if target already inactive
+        effective_permanent = permanent or (target.is_active is False)
         
-        logger.info(f"🗑️ Deleted target: {target.domain}")
-        
-        return {"message": "Target deleted successfully"}
-        
+        if effective_permanent:
+            # Delete related scans first
+            from models.scan import Scan
+            await db.execute(delete(Scan).where(Scan.target_id == target_id))
+            # Delete target
+            await db.execute(delete(Target).where(Target.id == target_id))
+            await db.commit()
+            logger.info(f"🗑️ Permanently deleted target and related scans: {target.domain}")
+            return {"message": "Target and related scans deleted permanently"}
+        else:
+            # Soft delete by setting is_active to False
+            target.is_active = False
+            await db.commit()
+            logger.info(f"🗑️ Soft-deleted target (inactive): {target.domain}")
+            return {"message": "Target deactivated (soft delete)"}
+    
     except HTTPException:
         raise
     except Exception as e:

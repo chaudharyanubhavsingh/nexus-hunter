@@ -2,9 +2,6 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Wifi, WifiOff, Zap } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
-import { webSocketService } from '../services/websocket'
-
-type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 export default function WebSocketStatus() {
   const { state } = useAppContext()

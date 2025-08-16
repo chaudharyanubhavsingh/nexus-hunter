@@ -49,12 +49,18 @@ async def websocket_simple(websocket: WebSocket):
                 break
                 
     except Exception as e:
-        logger.error(f"Simple WebSocket error: {e}")
-        
+        logger.error(f"❌ WebSocket error for client {client_id}: {e}")
     finally:
-        # Clean up
+        # Remove from connection manager
         if client_id in WebSocketManager.manager.active_connections:
             del WebSocketManager.manager.active_connections[client_id]
+            logger.info(f"🔌 WebSocket client {client_id} cleaned up")
+
+
+@router.websocket("/")
+async def websocket_with_slash(websocket: WebSocket):
+    """WebSocket endpoint with trailing slash for compatibility"""
+    await websocket_simple(websocket)
 
 
 @router.websocket("/connect")

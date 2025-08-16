@@ -1,0 +1,8 @@
+{
+  "auto_scan_enabled": true,
+  "notifications_enabled": true,
+  "concurrent_scans": 3,
+  "scan_timeout": 3600,
+  "last_updated": "never",
+  "test_key_fix": "test_value_fix"
+}

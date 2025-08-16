@@ -1,5 +1,6 @@
-import React from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import { 
   Activity, 
   Target, 
@@ -12,23 +13,20 @@ import {
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { useDashboardData } from '../hooks/useApi'
+import AddTargetModal from '../components/AddTargetModal'
+import CreateScanModal from '../components/CreateScanModal'
 
 export default function Dashboard() {
   const { state } = useAppContext()
   const dashboardData = useDashboardData()
+  const navigate = useNavigate()
 
-  // Load data on component mount
-  React.useEffect(() => {
-    if (dashboardData.targets.refetch) {
-      dashboardData.targets.refetch()
-    }
-    if (dashboardData.scans.refetch) {
-      dashboardData.scans.refetch() 
-    }
-    if (dashboardData.vulnerabilities.refetch) {
-      dashboardData.vulnerabilities.refetch()
-    }
-  }, [dashboardData])
+  // Modal states
+  const [isAddTargetModalOpen, setIsAddTargetModalOpen] = useState(false)
+  const [isCreateScanModalOpen, setIsCreateScanModalOpen] = useState(false)
+
+  // Remove manual refetch calls - rely on query cache and WebSocket updates
+  // The excessive manual refetching was causing database noise
 
   const recentActivity = [
     {
@@ -295,21 +293,30 @@ export default function Dashboard() {
             </h3>
             
             <div className="space-y-3">
-              <button className="w-full btn-cyber text-left p-3">
+              <button 
+                onClick={() => setIsCreateScanModalOpen(true)}
+                className="w-full btn-cyber text-left p-3 hover:bg-primary/10 transition-colors"
+              >
                 <div className="flex items-center justify-between">
                   <span>NEW SCAN</span>
                   <TrendingUp size={16} />
                 </div>
               </button>
               
-              <button className="w-full btn-cyber text-left p-3">
+              <button 
+                onClick={() => setIsAddTargetModalOpen(true)}
+                className="w-full btn-cyber text-left p-3 hover:bg-primary/10 transition-colors"
+              >
                 <div className="flex items-center justify-between">
                   <span>ADD TARGET</span>
                   <Target size={16} />
                 </div>
               </button>
               
-              <button className="w-full btn-cyber text-left p-3">
+              <button 
+                onClick={() => navigate('/reports')}
+                className="w-full btn-cyber text-left p-3 hover:bg-primary/10 transition-colors"
+              >
                 <div className="flex items-center justify-between">
                   <span>VIEW REPORTS</span>
                   <Eye size={16} />
@@ -319,6 +326,17 @@ export default function Dashboard() {
           </div>
         </motion.div>
       </div>
+
+      {/* Modals */}
+      <AddTargetModal
+        isOpen={isAddTargetModalOpen}
+        onClose={() => setIsAddTargetModalOpen(false)}
+      />
+      
+      <CreateScanModal
+        isOpen={isCreateScanModalOpen}
+        onClose={() => setIsCreateScanModalOpen(false)}
+      />
     </div>
   )
 } 

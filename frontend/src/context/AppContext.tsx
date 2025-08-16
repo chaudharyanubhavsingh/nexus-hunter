@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { Target, Scan, Vulnerability } from '../services/api';
-import { webSocketService } from '../services/websocket';
-import toast from 'react-hot-toast';
+import webSocketService from '../services/websocket';
+import { useQueryClient } from 'react-query';
 
 // State interface
 interface AppState {
@@ -35,7 +35,8 @@ type AppAction =
   | { type: 'SET_VULNERABILITIES'; payload: Vulnerability[] }
   | { type: 'ADD_VULNERABILITY'; payload: Vulnerability }
   | { type: 'SET_WS_STATUS'; payload: 'connecting' | 'connected' | 'disconnected' | 'error' }
-  | { type: 'UPDATE_STATS' };
+  | { type: 'UPDATE_STATS' }
+  | { type: 'UPDATE_SCAN_BY_ID'; payload: { scan_id: string; updates: Partial<Scan> } };
 
 // Initial state
 const initialState: AppState = {
@@ -139,13 +140,33 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, wsConnectionStatus: action.payload };
 
     case 'UPDATE_STATS':
+      const completedScans = state.scans.filter(s => s.status === 'completed' && s.results)
+      const totalVulns = completedScans.reduce((sum, s) => {
+        const results = typeof (s as any).results === 'string' ? JSON.parse((s as any).results) : (s as any).results
+        const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : []
+        return sum + (vulns.length > 0 ? vulns.length : 0)
+      }, 0)
+      const criticalVulns = completedScans.reduce((sum, s) => {
+        const results = typeof (s as any).results === 'string' ? JSON.parse((s as any).results) : (s as any).results
+        const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : []
+        const criticalCount = vulns.length > 0 ? vulns.filter((v: any) => v.severity === 'critical').length : 0
+        return sum + criticalCount
+      }, 0)
       const stats = {
         totalTargets: state.targets.filter(t => t.is_active).length,
         activeScans: state.activeScans.size,
-        totalVulnerabilities: state.vulnerabilities.length,
-        criticalVulnerabilities: state.vulnerabilities.filter(v => v.severity === 'critical').length,
+        totalVulnerabilities: totalVulns,
+        criticalVulnerabilities: criticalVulns,
       };
       return { ...state, stats };
+
+    case 'UPDATE_SCAN_BY_ID':
+      return {
+        ...state,
+        scans: state.scans.map(scan =>
+          scan.id === action.payload.scan_id ? { ...scan, ...action.payload.updates } : scan
+        ),
+      };
 
     default:
       return state;
@@ -156,9 +177,9 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 interface AppContextType {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
+  wsConnectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error';
   actions: {
     setLoading: (loading: boolean) => void;
-    setError: (error: string | null) => void;
     addTarget: (target: Target) => void;
     updateTarget: (target: Target) => void;
     removeTarget: (id: string) => void;
@@ -174,68 +195,90 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Provider component
 interface AppProviderProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const queryClient = useQueryClient();
 
   // WebSocket integration
   useEffect(() => {
+    // Auto-connect WebSocket when AppContext initializes
+    console.log('AppContext: Initializing WebSocket connection');
+    webSocketService.connect();
+
     // Subscribe to WebSocket events
-    const unsubscribeStatus = webSocketService.subscribe('connection_status', (data) => {
-      dispatch({ type: 'SET_WS_STATUS', payload: data.status });
+    const unsubscribeStatusChange = webSocketService.subscribe('connection_status', (statusPayload) => {
+      const nextStatus = (statusPayload && typeof statusPayload.status === 'string')
+        ? statusPayload.status
+        : 'disconnected'
+      dispatch({ type: 'SET_WS_STATUS', payload: nextStatus });
     });
 
-    const unsubscribeScanUpdate = webSocketService.subscribe('scan_update', (data) => {
-      // Update scan with new progress/status
-      const updatedScan: Partial<Scan> = {
-        id: data.scan_id,
-        status: data.status,
-        progress: data.progress,
-      };
-      
-      // Find the existing scan and update it
-      const existingScan = state.scans.find(s => s.id === data.scan_id);
-      if (existingScan) {
+    const unsubscribeScanUpdate = webSocketService.subscribe('scan_update', (message) => {
+      if (message && message.scan_id) {
         dispatch({
-          type: 'UPDATE_SCAN',
-          payload: { ...existingScan, ...updatedScan } as Scan
+          type: 'UPDATE_SCAN_BY_ID',
+          payload: {
+            scan_id: message.scan_id,
+            updates: {
+              status: message.status,
+              progress_percentage: typeof message.progress === 'number' ? message.progress : 0,
+              ...(message.results && { results: message.results })
+            }
+          }
         });
       }
     });
 
-    const unsubscribeVulnFound = webSocketService.subscribe('vulnerability_found', (data) => {
-      toast.error(`New ${data.vulnerability.severity} vulnerability found: ${data.vulnerability.title}`);
-      // Note: We would need the full vulnerability object to add it to state
-    });
-
-    const unsubscribeScanCompleted = webSocketService.subscribe('scan_completed', (data) => {
-      toast.success(`Scan completed: ${data.scan_name || data.scan_id}`);
-      // Update scan status to completed
-      const existingScan = state.scans.find(s => s.id === data.scan_id);
-      if (existingScan) {
+    const unsubscribeScanCompleted = webSocketService.subscribe('scan_completed', (message) => {
+      if (message && message.scan_id) {
         dispatch({
-          type: 'UPDATE_SCAN',
-          payload: { ...existingScan, status: 'completed', progress: 100 } as Scan
+          type: 'UPDATE_SCAN_BY_ID',
+          payload: {
+            scan_id: message.scan_id,
+            updates: {
+              status: 'completed',
+              progress_percentage: 100,
+              ...(message.results && { results: message.results }),
+              ...(message.completed_at && { completed_at: message.completed_at })
+            }
+          }
         });
+        // Invalidate scans to ensure any derived data (e.g., server-side duration) is refreshed
+        queryClient.invalidateQueries('scans');
+        queryClient.invalidateQueries(['scanDetails', message.scan_id]);
       }
     });
 
-    // Set initial WebSocket status
-    dispatch({ 
-      type: 'SET_WS_STATUS', 
-      payload: webSocketService.getConnectionStatus() 
+    const unsubscribeScanFailed = webSocketService.subscribe('scan_failed', (message) => {
+      if (message && message.scan_id) {
+        dispatch({
+          type: 'UPDATE_SCAN_BY_ID',
+          payload: {
+            scan_id: message.scan_id,
+            updates: {
+              status: 'failed',
+              progress_percentage: 0
+            }
+          }
+        });
+        // Make sure list reflects failure state quickly
+        queryClient.invalidateQueries('scans');
+        queryClient.invalidateQueries(['scanDetails', message.scan_id]);
+      }
     });
 
-    // Cleanup
+    // Cleanup subscriptions on unmount
     return () => {
-      unsubscribeStatus();
+      unsubscribeStatusChange();
       unsubscribeScanUpdate();
-      unsubscribeVulnFound();
       unsubscribeScanCompleted();
+      unsubscribeScanFailed();
+      // Note: We don't disconnect WebSocket here as it should persist across route changes
     };
-  }, [state.scans]);
+  }, [queryClient]);
 
   // Update stats whenever relevant state changes
   useEffect(() => {
@@ -257,7 +300,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   return (
-    <AppContext.Provider value={{ state, dispatch, actions }}>
+    <AppContext.Provider value={{ 
+      state, 
+      dispatch, 
+      wsConnectionStatus: state.wsConnectionStatus,
+      actions 
+    }}>
       {children}
     </AppContext.Provider>
   );

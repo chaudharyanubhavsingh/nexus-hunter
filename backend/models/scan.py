@@ -19,6 +19,7 @@ class ScanStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    SCHEDULED = "scheduled"
 
 
 class ScanType(str, Enum):

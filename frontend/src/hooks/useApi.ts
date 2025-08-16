@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useAppContext } from '../context/AppContext';
-import apiService, { Target, Scan, Vulnerability, CreateTargetRequest, CreateScanRequest } from '../services/api';
+import apiService, { CreateTargetRequest, CreateScanRequest } from '../services/api';
 import toast from 'react-hot-toast';
+import { getUserFriendlyMessage } from '../utils/errorHandler';
 
 // Query keys
 export const QUERY_KEYS = {
@@ -12,14 +13,35 @@ export const QUERY_KEYS = {
   REPORTS: 'reports',
 };
 
+// Debounce utility to prevent multiple simultaneous refetches
+const debounceMap = new Map<string, number>();
+
+const debouncedRefetch = (key: string, refetchFn: () => void, delay: number = 500) => {
+  if (debounceMap.has(key)) {
+    clearTimeout(debounceMap.get(key)!);
+  }
+  
+  const timeout = setTimeout(() => {
+    refetchFn();
+    debounceMap.delete(key);
+  }, delay);
+  
+  debounceMap.set(key, timeout);
+};
+
 // Targets hooks
 export const useTargets = () => {
-  const { state, dispatch } = useAppContext();
+  const { dispatch } = useAppContext();
   
   return useQuery(
     QUERY_KEYS.TARGETS,
     apiService.getTargets,
     {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes  
+      refetchOnWindowFocus: false, // Disable aggressive refetching
+      refetchOnMount: false, // Don't refetch on every mount
+      refetchOnReconnect: true, // Keep this for WebSocket reconnects
       onSuccess: (data) => {
         dispatch({ type: 'SET_TARGETS', payload: data });
       },
@@ -44,9 +66,9 @@ export const useCreateTarget = () => {
         toast.success(`Target "${newTarget.name}" created successfully`);
       },
       onError: (error: any) => {
-        const message = error.response?.data?.detail || 'Failed to create target';
-        toast.error(message);
         console.error('Error creating target:', error);
+        const message = getUserFriendlyMessage(error, 'create target');
+        toast.error(message);
       },
     }
   );
@@ -66,9 +88,9 @@ export const useUpdateTarget = () => {
         toast.success(`Target "${updatedTarget.name}" updated successfully`);
       },
       onError: (error: any) => {
-        const message = error.response?.data?.detail || 'Failed to update target';
-        toast.error(message);
         console.error('Error updating target:', error);
+        const message = getUserFriendlyMessage(error, 'update target');
+        toast.error(message);
       },
     }
   );
@@ -79,17 +101,26 @@ export const useDeleteTarget = () => {
   const { actions } = useAppContext();
 
   return useMutation(
-    (id: string) => apiService.deleteTarget(id),
+    (idWithFlag: string) => {
+      const [id, flag] = idWithFlag.split('::');
+      const permanent = flag === 'permanent';
+      return apiService.deleteTarget(id, permanent);
+    },
     {
-      onSuccess: (_, deletedId) => {
-        actions.removeTarget(deletedId);
+      onSuccess: (_data, variables) => {
+        const idWithFlag = String(variables);
+        const [id, flag] = idWithFlag.split('::');
+        const isPermanent = flag === 'permanent';
+        if (isPermanent) {
+          actions.removeTarget(id);
+        }
         queryClient.invalidateQueries(QUERY_KEYS.TARGETS);
-        toast.success('Target deleted successfully');
+        toast.success(isPermanent ? 'Target deleted permanently' : 'Target deactivated');
       },
       onError: (error: any) => {
-        const message = error.response?.data?.detail || 'Failed to delete target';
-        toast.error(message);
         console.error('Error deleting target:', error);
+        const message = getUserFriendlyMessage(error, 'delete target');
+        toast.error(message);
       },
     }
   );
@@ -103,14 +134,20 @@ export const useScans = () => {
     QUERY_KEYS.SCANS,
     apiService.getScans,
     {
+      staleTime: 10000, // 10 seconds - shorter for real-time updates
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 20000),
+      refetchOnMount: true, // Re-enable mount refetch for initial data loading
+      refetchOnWindowFocus: true, // Re-enable for immediate updates when switching tabs
+      refetchOnReconnect: true, // Keep for WebSocket reconnects
+      refetchInterval: 30000, // Re-enable auto-refresh every 30 seconds for real-time updates
       onSuccess: (data) => {
         dispatch({ type: 'SET_SCANS', payload: data });
       },
       onError: (error) => {
-        toast.error('Failed to fetch scans');
         console.error('Error fetching scans:', error);
       },
-      refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
     }
   );
 };
@@ -142,9 +179,9 @@ export const useCreateScan = () => {
         toast.success(`Scan "${newScan.name}" started successfully`);
       },
       onError: (error: any) => {
-        const message = error.response?.data?.detail || 'Failed to start scan';
-        toast.error(message);
         console.error('Error creating scan:', error);
+        const message = getUserFriendlyMessage(error, 'start scan');
+        toast.error(message);
       },
     }
   );
@@ -152,20 +189,39 @@ export const useCreateScan = () => {
 
 export const useCancelScan = () => {
   const queryClient = useQueryClient();
-  const { actions } = useAppContext();
 
   return useMutation(
     (scanId: string) => apiService.cancelScan(scanId),
     {
-      onSuccess: (_, scanId) => {
-        // Update scan status to cancelled
+      onSuccess: () => {
         queryClient.invalidateQueries(QUERY_KEYS.SCANS);
         toast.success('Scan cancelled successfully');
       },
       onError: (error: any) => {
-        const message = error.response?.data?.detail || 'Failed to cancel scan';
-        toast.error(message);
         console.error('Error cancelling scan:', error);
+        const message = getUserFriendlyMessage(error, 'cancel scan');
+        toast.error(message);
+      },
+    }
+  );
+};
+
+export const useDeleteScan = () => {
+  const queryClient = useQueryClient();
+  const { actions } = useAppContext();
+
+  return useMutation(
+    (scanId: string) => apiService.deleteScan(scanId),
+    {
+      onSuccess: (_, scanId) => {
+        actions.removeScan(scanId);
+        queryClient.invalidateQueries(QUERY_KEYS.SCANS);
+        toast.success('Scan deleted successfully');
+      },
+      onError: (error: any) => {
+        console.error('Error deleting scan:', error);
+        const message = getUserFriendlyMessage(error, 'delete scan');
+        toast.error(message);
       },
     }
   );
@@ -177,13 +233,17 @@ export const useVulnerabilities = (scanId?: string) => {
   
   return useQuery(
     [QUERY_KEYS.VULNERABILITIES, scanId],
-    () => apiService.getVulnerabilities(scanId),
+    () => apiService.getVulnerabilities(),
     {
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnWindowFocus: false, // Disable aggressive refetching
+      refetchOnMount: false, // Don't refetch on every mount
+      refetchOnReconnect: true, // Keep for WebSocket reconnects
       onSuccess: (data) => {
         dispatch({ type: 'SET_VULNERABILITIES', payload: data });
       },
       onError: (error) => {
-        toast.error('Failed to fetch vulnerabilities');
         console.error('Error fetching vulnerabilities:', error);
       },
     }
@@ -196,8 +256,14 @@ export const useReports = (scanId?: string) => {
     [QUERY_KEYS.REPORTS, scanId],
     () => apiService.getReports(scanId),
     {
+      staleTime: 2 * 60 * 1000, // 2 minutes  
+      cacheTime: 5 * 60 * 1000, // 5 minutes
+      retry: 2, // Reduce retry attempts
+      retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 20000),
+      refetchOnWindowFocus: false, // Disable aggressive refetching
+      refetchOnMount: false, // Don't refetch on every mount
+      refetchOnReconnect: true, // Keep for WebSocket reconnects
       onError: (error) => {
-        toast.error('Failed to fetch reports');
         console.error('Error fetching reports:', error);
       },
     }
@@ -210,7 +276,6 @@ export const useDownloadReport = () => {
       apiService.downloadReport(scanId, reportType, format),
     {
       onSuccess: (blob, { reportType, format }) => {
-        // Create download link
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -223,24 +288,32 @@ export const useDownloadReport = () => {
         toast.success('Report downloaded successfully');
       },
       onError: (error: any) => {
-        const message = error.response?.data?.detail || 'Failed to download report';
-        toast.error(message);
         console.error('Error downloading report:', error);
+        const message = getUserFriendlyMessage(error, 'download report');
+        toast.error(message);
       },
     }
   );
 };
 
-// Combined hook for dashboard data
+// Optimized combined hook for dashboard data with debounced refetch
 export const useDashboardData = () => {
   const targets = useTargets();
   const scans = useScans();
   const vulnerabilities = useVulnerabilities();
 
+  // Debounced refetch functions to prevent simultaneous calls
+  const refetchAll = () => {
+    debouncedRefetch('dashboard-targets', () => targets.refetch());
+    debouncedRefetch('dashboard-scans', () => scans.refetch());
+    debouncedRefetch('dashboard-vulnerabilities', () => vulnerabilities.refetch());
+  };
+
   return {
     targets,
     scans,
     vulnerabilities,
+    refetchAll, // Provide optimized refetch function
     isLoading: targets.isLoading || scans.isLoading || vulnerabilities.isLoading,
     isError: targets.isError || scans.isError || vulnerabilities.isError,
   };
