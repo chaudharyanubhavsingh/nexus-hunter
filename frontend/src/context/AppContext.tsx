@@ -161,12 +161,31 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, stats };
 
     case 'UPDATE_SCAN_BY_ID':
-      return {
-        ...state,
-        scans: state.scans.map(scan =>
-          scan.id === action.payload.scan_id ? { ...scan, ...action.payload.updates } : scan
-        ),
-      };
+      {
+        const exists = state.scans.some(s => s.id === action.payload.scan_id)
+        if (!exists) {
+          const nowIso = new Date().toISOString()
+          const minimalScan: any = {
+            id: action.payload.scan_id,
+            name: `Scan ${action.payload.scan_id.slice(0, 8)}`,
+            target_id: '',
+            scan_type: 'reconnaissance',
+            status: action.payload.updates.status || 'running',
+            progress_percentage: action.payload.updates.progress_percentage || 0,
+            results: action.payload.updates.results || null,
+            created_at: nowIso,
+            updated_at: nowIso,
+            ...(action.payload.updates as any),
+          }
+          return { ...state, scans: [...state.scans, minimalScan] }
+        }
+        return {
+          ...state,
+          scans: state.scans.map(scan =>
+            scan.id === action.payload.scan_id ? { ...scan, ...action.payload.updates } : scan
+          ),
+        }
+      }
 
     default:
       return state;
@@ -229,6 +248,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             }
           }
         });
+        // Ensure UI reflects latest progress even if scan object isn't in state yet
+        try {
+          queryClient.invalidateQueries('scans');
+          queryClient.invalidateQueries(['scanDetails', message.scan_id]);
+        } catch {}
       }
     });
 
@@ -275,6 +299,39 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       queryClient.invalidateQueries('vulnerabilities');
     });
 
+    // Detect agent state changes from system_status payloads (if provided)
+    let lastAgents: Record<string, string> = {};
+    const unsubscribeSystemStatus = webSocketService.subscribe('system_status', (payload) => {
+      const agents = (payload && payload.agents) || (payload && payload.status && payload.status.agents) || null;
+      if (agents && typeof agents === 'object') {
+        const changes: Array<{ name: string; from?: string; to: string }> = []
+        for (const [name, to] of Object.entries(agents as Record<string, string>)) {
+          const from = lastAgents[name]
+          if (!from || from !== to) changes.push({ name, from, to })
+        }
+        lastAgents = agents as Record<string, string>
+        if (changes.length > 0) {
+          try {
+            const key = 'nexus_activity_feed_persistent';
+            const raw = localStorage.getItem(key);
+            const list = raw ? JSON.parse(raw) : [];
+            const entries = changes.map((c) => ({
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'system_status',
+              message: `Agent ${c.name} ${c.from ? `changed from ${c.from} to` : 'is now'} ${c.to}`,
+              severity: c.to === 'offline' ? 'high' : 'info',
+              iconKey: c.to === 'offline' ? 'alert' : 'zap',
+              payload: { agent: c.name, state: c.to }
+            }))
+            const next = [...entries, ...Array.isArray(list) ? list : []].slice(0, 300)
+            localStorage.setItem(key, JSON.stringify(next))
+            try { window.dispatchEvent(new CustomEvent('nexus-activity-updated', { detail: { key } })) } catch {}
+          } catch {}
+        }
+      }
+    });
+
     // Cleanup subscriptions on unmount
     return () => {
       unsubscribeStatusChange();
@@ -282,6 +339,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       unsubscribeScanCompleted();
       unsubscribeScanFailed();
       unsubscribeVulnFound();
+      unsubscribeSystemStatus();
       // Note: We don't disconnect WebSocket here as it should persist across route changes
     };
   }, [queryClient]);

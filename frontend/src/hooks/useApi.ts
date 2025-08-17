@@ -30,16 +30,7 @@ const debouncedRefetch = (key: string, refetchFn: () => void, delay: number = 50
 };
 
 // Activity persistence helpers (align with Dashboard)
-const getSessionId = (): string => {
-  let sid = sessionStorage.getItem('nexus_session_id');
-  if (!sid) {
-    sid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    sessionStorage.setItem('nexus_session_id', sid);
-  }
-  return sid;
-};
-
-const getActivityKey = (): string => `nexus_activity_feed_${getSessionId()}`;
+const getActivityKey = (): string => 'nexus_activity_feed_persistent';
 
 const pushActivity = (entry: any) => {
   try {
@@ -55,6 +46,9 @@ const pushActivity = (entry: any) => {
       ...Array.isArray(list) ? list : []
     ].slice(0, 300);
     localStorage.setItem(key, JSON.stringify(next));
+    try {
+      window.dispatchEvent(new CustomEvent('nexus-activity-updated', { detail: { key } }));
+    } catch {}
   } catch {}
 };
 
@@ -96,7 +90,7 @@ export const useCreateTarget = () => {
           type: 'target_created',
           message: `Target "${newTarget.name}" created`,
           severity: 'success',
-          icon: 'Target',
+          iconKey: 'target',
           payload: newTarget,
         });
         toast.success(`Target "${newTarget.name}" created successfully`);
@@ -125,7 +119,7 @@ export const useUpdateTarget = () => {
           type: 'target_updated',
           message: `Target "${updatedTarget.name}" updated`,
           severity: 'info',
-          icon: 'Target',
+          iconKey: 'target',
           payload: updatedTarget,
         });
         toast.success(`Target "${updatedTarget.name}" updated successfully`);
@@ -141,7 +135,7 @@ export const useUpdateTarget = () => {
 
 export const useDeleteTarget = () => {
   const queryClient = useQueryClient();
-  const { actions } = useAppContext();
+  const { actions, state } = useAppContext();
 
   return useMutation(
     (idWithFlag: string) => {
@@ -154,16 +148,18 @@ export const useDeleteTarget = () => {
         const idWithFlag = String(variables);
         const [id, flag] = idWithFlag.split('::');
         const isPermanent = flag === 'permanent';
+        const target = state.targets.find(t => t.id === id);
+        const nameOrId = target?.name || id;
         if (isPermanent) {
           actions.removeTarget(id);
         }
         queryClient.invalidateQueries(QUERY_KEYS.TARGETS);
         pushActivity({
           type: isPermanent ? 'target_deleted' : 'target_deactivated',
-          message: isPermanent ? 'Target deleted permanently' : 'Target deactivated',
+          message: isPermanent ? `Target "${nameOrId}" deleted permanently` : `Target "${nameOrId}" deactivated`,
           severity: isPermanent ? 'high' : 'info',
-          icon: 'Target',
-          payload: { id },
+          iconKey: 'target',
+          payload: { id, name: target?.name },
         });
         toast.success(isPermanent ? 'Target deleted permanently' : 'Target deactivated');
       },
@@ -230,7 +226,7 @@ export const useCreateScan = () => {
           type: 'scan_created',
           message: `Scan "${newScan.name}" started`,
           severity: 'info',
-          icon: 'Activity',
+          iconKey: 'activity',
           payload: newScan,
         });
         toast.success(`Scan "${newScan.name}" started successfully`);
@@ -256,7 +252,7 @@ export const useCancelScan = () => {
           type: 'scan_cancelled',
           message: `Scan ${scanId} cancelled`,
           severity: 'high',
-          icon: 'Activity',
+          iconKey: 'activity',
           payload: { scanId },
         });
         toast.success('Scan cancelled successfully');
@@ -284,7 +280,7 @@ export const useDeleteScan = () => {
           type: 'scan_deleted',
           message: `Scan ${scanId} deleted`,
           severity: 'high',
-          icon: 'Activity',
+          iconKey: 'activity',
           payload: { scanId },
         });
         toast.success('Scan deleted successfully');
@@ -360,7 +356,7 @@ export const useDownloadReport = () => {
           type: 'report_downloaded',
           message: `Downloaded ${reportType} report for scan ${scanId}`,
           severity: 'success',
-          icon: 'File',
+          iconKey: 'file',
           payload: { scanId, reportType, format },
         });
         toast.success('Report downloaded successfully');

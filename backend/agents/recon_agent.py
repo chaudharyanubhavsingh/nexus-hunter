@@ -28,8 +28,16 @@ class ReconAgent(BaseAgent):
         self.discovered_ports: Dict[str, List[int]] = {}
         self.technology_stack: Dict[str, Dict[str, Any]] = {}
     
-    async def execute(self, target_domain: str, **kwargs) -> Dict[str, Any]:
-        """Execute comprehensive reconnaissance"""
+    async def execute(self, scan_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Execute reconnaissance with awareness of advanced config."""
+        config = scan_data.get("config") or {}
+        rate_limit = config.get("rate_limit")
+        custom_headers = config.get("custom_headers") or {}
+        exclude_paths = config.get("exclude_paths") or []
+        auth = config.get("auth") or {}
+        # For now, we only log/acknowledge these; future step: wire to real tools
+        self.logger.info(f"Recon config -> rate_limit={rate_limit}, headers={bool(custom_headers)}, exclude={len(exclude_paths)}, auth={bool(auth)}")
+        target_domain = scan_data.get("target") or scan_data.get("target_domain") or scan_data.get("domain") or "unknown"
         
         results = {
             "target": target_domain,

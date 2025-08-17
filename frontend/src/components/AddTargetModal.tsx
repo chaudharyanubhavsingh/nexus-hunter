@@ -4,6 +4,8 @@ import { Target, X } from 'lucide-react';
 import { useCreateTarget } from '../hooks/useApi';
 import UniversalForm, { FormField } from './UniversalForm';
 import { ValidationSchema, validationPatterns } from '../utils/validation';
+import { useAppContext } from '../context/AppContext';
+import toast from 'react-hot-toast';
 
 interface AddTargetModalProps {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface AddTargetModalProps {
 
 const AddTargetModal: React.FC<AddTargetModalProps> = ({ isOpen, onClose }) => {
   const createTargetMutation = useCreateTarget();
+  const { state } = useAppContext();
 
   // Define form fields with comprehensive input handling
   const formFields: FormField[] = [
@@ -173,51 +176,66 @@ const AddTargetModal: React.FC<AddTargetModalProps> = ({ isOpen, onClose }) => {
     },
   };
 
+  const normalizeDomain = (raw: string): string => {
+    if (!raw) return raw;
+    let d = raw.trim().toLowerCase();
+    d = d.replace('http://', '').replace('https://', '');
+    if (d.endsWith('/')) d = d.slice(0, -1);
+    return d;
+  };
+
   const handleSubmit = async (formData: Record<string, any>) => {
     try {
+      // Normalize domain
+      const normalizedDomain = normalizeDomain(formData.domain);
+
+      // Prevent duplicates (match backend behavior)
+      const exists = state.targets.some(t => t.domain.toLowerCase() === normalizedDomain);
+      if (exists) {
+        toast.error('Target domain already exists');
+        return;
+      }
+
       // Convert scope selection to backend format
       let scopeArray: string[] = [];
       
       if (formData.scope_type === 'custom' && formData.custom_scope?.length > 0) {
         scopeArray = formData.custom_scope;
       } else if (formData.scope_type === 'full') {
-        scopeArray = [`*.${formData.domain}`, formData.domain];
+        scopeArray = [`*.${normalizedDomain}`, normalizedDomain];
       } else if (formData.scope_type === 'subdomain') {
-        scopeArray = [`*.${formData.domain}`];
+        scopeArray = [`*.${normalizedDomain}`];
       } else if (formData.scope_type === 'domain') {
-        scopeArray = [formData.domain];
+        scopeArray = [normalizedDomain];
       }
 
-      // Parse API config if provided
-      let apiConfig = null;
-      if (formData.api_config) {
-        try {
-          apiConfig = JSON.parse(formData.api_config);
-        } catch {
-          // Already validated, but just in case
-        }
-      }
-
-      // Prepare data for backend
+      // Prepare minimal data for backend
       const targetData = {
         name: formData.name,
-        domain: formData.domain,
+        domain: normalizedDomain,
         description: formData.description || undefined,
         scope: scopeArray.length > 0 ? scopeArray : undefined,
         out_of_scope: formData.out_of_scope?.length > 0 ? formData.out_of_scope : undefined,
-        // Additional fields can be stored in metadata or extended backend model
-        metadata: {
-          priority: formData.priority,
-          max_depth: formData.max_depth,
-          contact_email: formData.contact_email,
-          rate_limit: formData.rate_limit,
-          authentication_required: formData.authentication_required,
-          api_config: apiConfig,
-          notes: formData.notes,
-        },
       };
 
       await createTargetMutation.mutateAsync(targetData);
+
+      // Persist advanced/optional settings locally for use during scan creation
+      try {
+        const advancedSettings = {
+          priority: formData.priority || null,
+          max_depth: formData.max_depth ?? null,
+          contact_email: formData.contact_email || null,
+          rate_limit: formData.rate_limit ?? null,
+          authentication_required: !!formData.authentication_required,
+          api_config: (() => { try { return formData.api_config ? JSON.parse(formData.api_config) : null; } catch { return null; } })(),
+          notes: formData.notes || null,
+          scope_rules: scopeArray,
+          out_of_scope: targetData.out_of_scope || [],
+        };
+        localStorage.setItem(`target_settings:${normalizedDomain}`, JSON.stringify(advancedSettings));
+      } catch {}
+
       onClose();
     } catch (error) {
       // Error handling is done in the mutation

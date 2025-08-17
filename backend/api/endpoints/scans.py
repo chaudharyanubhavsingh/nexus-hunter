@@ -97,6 +97,9 @@ class ScanResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -127,6 +130,36 @@ async def create_scan(
         
         # Check if this is a scheduled scan
         config = scan_request.config or {}
+        # Normalize/validate some optional advanced fields (best-effort)
+        try:
+            headers = config.get('custom_headers')
+            if isinstance(headers, str):
+                import json as _json
+                try:
+                    config['custom_headers'] = _json.loads(headers)
+                except Exception:
+                    pass
+            auth = config.get('auth')
+            if isinstance(auth, str):
+                import json as _json
+                try:
+                    config['auth'] = _json.loads(auth)
+                except Exception:
+                    pass
+            # Coerce numbers
+            if 'rate_limit' in config:
+                try:
+                    config['rate_limit'] = int(config.get('rate_limit'))
+                except Exception:
+                    pass
+            if 'max_concurrent_requests' in config:
+                try:
+                    config['max_concurrent_requests'] = int(config.get('max_concurrent_requests'))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        
         schedule_type = config.get('schedule_type', 'immediate')
         
         if schedule_type == 'scheduled':
@@ -401,13 +434,40 @@ async def get_scan_results(
         # Also get results from Redis cache for real-time data
         cached_results = await RedisClient.get(f"scan_results:{scan_id}")
         
+        # Avoid accessing relationships in async context to prevent greenlet errors
+        def safe_count_vulns(res: Optional[Dict[str, Any]]) -> int:
+            try:
+                if not isinstance(res, dict):
+                    return 0
+                # Try ReportAgent structure first
+                ra = res.get("ReportAgent") or {}
+                meta_findings = ra.get("metadata", {}).get("findings_count")
+                if isinstance(meta_findings, int):
+                    return meta_findings
+                vulns = res.get("vulnerabilities")
+                if isinstance(vulns, list):
+                    return len(vulns)
+                return 0
+            except Exception:
+                return 0
+        
+        vulnerabilities_count = safe_count_vulns(scan.results)
+        findings_count = 0
+        try:
+            if isinstance(scan.results, dict):
+                findings = scan.results.get("findings")
+                if isinstance(findings, list):
+                    findings_count = len(findings)
+        except Exception:
+            findings_count = 0
+        
         return {
-            "scan_id": scan_id,
+            "scan_id": str(scan_id),
             "status": scan.status,
             "results": scan.results or {},
             "cached_results": cached_results or {},
-            "vulnerabilities_count": len(scan.vulnerabilities) if scan.vulnerabilities else 0,
-            "findings_count": len(scan.findings) if scan.findings else 0
+            "vulnerabilities_count": vulnerabilities_count,
+            "findings_count": findings_count
         }
         
     except HTTPException:
@@ -441,7 +501,8 @@ async def execute_scan(scan_id: UUID, target_domain: str):
                 "scan_id": str(scan_id),
                 "status": "running",
                 "progress": 5,
-                "message": "Scan execution started"
+                "message": "Scan execution started",
+                "started_at": datetime.now().isoformat()
             }
         })
         
@@ -1111,15 +1172,27 @@ async def create_scheduled_scan(
 
 @router.get("/schedules")
 async def get_scheduled_scans():
-    """Get all scheduled scans."""
+    """Get all scheduled scans (match frontend expectations)."""
     try:
-        return {
-            "schedules": auto_scan_scheduler.get_scheduled_scans(),
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        # Return the raw schedules dict for compatibility with frontend page
+        schedules = auto_scan_scheduler.get_scheduled_scans()
+        return schedules
     except Exception as e:
         logger.error(f"Error getting scheduled scans: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get scheduled scans: {str(e)}")
+
+
+@router.post("/schedules/{schedule_id}/execute")
+async def execute_scheduled_scan_now(schedule_id: str):
+    """Execute a scheduled scan immediately (manual trigger)."""
+    try:
+        await auto_scan_scheduler.execute_now(schedule_id)
+        return {"message": "Scheduled scan executed", "schedule_id": schedule_id}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    except Exception as e:
+        logger.error(f"Error executing scheduled scan now: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to execute scheduled scan: {str(e)}")
 
 
 @router.delete("/schedules/{schedule_id}")

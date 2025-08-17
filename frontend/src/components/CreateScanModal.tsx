@@ -130,11 +130,28 @@ const CreateScanModal: React.FC<CreateScanModalProps> = ({
       max: 300,
     },
     {
+      name: 'rate_limit',
+      label: 'Global Rate Limit (req/sec)',
+      type: 'number',
+      placeholder: '5',
+      description: 'Global throttling to avoid overloading the target',
+      min: 1,
+      max: 100,
+    },
+    {
       name: 'custom_headers',
       label: 'Custom Headers',
       type: 'json',
       placeholder: '{\n  "User-Agent": "Nexus-Hunter/1.0",\n  "Authorization": "Bearer token"\n}',
       description: 'Custom HTTP headers for requests (JSON format)',
+      rows: 4,
+    },
+    {
+      name: 'auth_config',
+      label: 'Authentication Config',
+      type: 'json',
+      placeholder: '{\n  "type": "bearer|basic|cookie",\n  "token": "...",\n  "username": "...",\n  "password": "..."\n}',
+      description: 'Authentication details if needed',
       rows: 4,
     },
     {
@@ -222,6 +239,22 @@ const CreateScanModal: React.FC<CreateScanModalProps> = ({
     },
   ], [activeTargets]);
 
+  // Auto-apply saved advanced target settings into scan config defaults
+  useEffect(() => {
+    try {
+      const selectedTarget = state.targets.find(t => t.id === (preselectedTargetId || undefined)) || null;
+      const domain = selectedTarget?.domain;
+      if (!domain) return;
+      const saved = localStorage.getItem(`target_settings:${domain}`);
+      if (!saved) return;
+      const adv = JSON.parse(saved);
+      // Merge into initial defaults in a controlled way
+      (initialData as any).priority = adv?.priority || (initialData as any).priority;
+      (initialData as any).max_concurrent_requests = adv?.rate_limit || (initialData as any).max_concurrent_requests;
+      (initialData as any).include_subdomains = true;
+    } catch {}
+  }, [state.targets, preselectedTargetId]);
+
   // Validation schema
   const validationSchema: ValidationSchema = {
     name: {
@@ -271,8 +304,12 @@ const CreateScanModal: React.FC<CreateScanModalProps> = ({
           // Already validated
         }
       }
+      let authConfig = null;
+      if (formData.auth_config) {
+        try { authConfig = JSON.parse(formData.auth_config); } catch { authConfig = null; }
+      }
 
-      // Prepare scan data
+      // Prepare scan data with extensive config
       const scanData = {
         name: formData.name,
         target_id: formData.target_id,
@@ -282,7 +319,9 @@ const CreateScanModal: React.FC<CreateScanModalProps> = ({
           priority: formData.priority,
           max_concurrent_requests: formData.max_concurrent_requests || 10,
           timeout_seconds: formData.timeout_seconds || 30,
+          rate_limit: formData.rate_limit || undefined,
           custom_headers: customHeaders,
+          auth: authConfig,
           exclude_paths: formData.exclude_paths || [],
           include_subdomains: formData.include_subdomains || false,
           deep_scan: formData.deep_scan || false,

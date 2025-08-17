@@ -5,6 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useScans, useCreateScan, useCancelScan, useDeleteScan } from '../hooks/useApi';
 import CreateScanModal from '../components/CreateScanModal';
 import { Scan } from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
 const Scans: React.FC = () => {
   const { state } = useAppContext();
@@ -14,6 +15,7 @@ const Scans: React.FC = () => {
   const deleteScanMutation = useDeleteScan();
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Remove redundant refetch on mount - rely on query cache and WebSocket updates
   // The excessive refetching was causing database noise
@@ -406,7 +408,7 @@ const Scans: React.FC = () => {
                           </button>
                         ) : scan.status === 'completed' ? (
                           <button 
-                            onClick={() => window.location.href = `/scans/${scan.id}`}
+                            onClick={() => navigate(`/scans/${scan.id}`)}
                             className="text-neon-green hover:text-cyber-white transition-colors"
                             title="View Details"
                           >

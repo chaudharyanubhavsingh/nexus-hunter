@@ -14,6 +14,7 @@ from loguru import logger
 
 from core.database import get_db_session
 from models.scan import Target
+from core.settings_persistence import settings_persistence
 
 router = APIRouter()
 
@@ -48,6 +49,18 @@ class TargetUpdateRequest(BaseModel):
     scope: Optional[List[str]] = None
     out_of_scope: Optional[List[str]] = None
     is_active: Optional[bool] = None
+
+
+class TargetAdvancedSettings(BaseModel):
+    priority: Optional[str] = None
+    max_depth: Optional[int] = None
+    contact_email: Optional[str] = None
+    rate_limit: Optional[int] = None
+    authentication_required: Optional[bool] = None
+    api_config: Optional[dict] = None
+    notes: Optional[str] = None
+    scope_rules: Optional[List[str]] = None
+    out_of_scope: Optional[List[str]] = None
 
 
 class TargetResponse(BaseModel):
@@ -213,6 +226,32 @@ async def update_target(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put("/{target_id}/settings", response_model=TargetAdvancedSettings)
+async def set_target_settings(target_id: UUID, settings: TargetAdvancedSettings):
+    """Set advanced target settings (persisted server-side without DB schema changes)."""
+    try:
+        key = f"target_settings:{target_id}"
+        data = settings.dict(exclude_unset=True)
+        settings_persistence.set(key, data)
+        logger.info(f"⚙️ Saved advanced settings for target {target_id}")
+        return settings
+    except Exception as e:
+        logger.error(f"Failed to save target settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{target_id}/settings", response_model=TargetAdvancedSettings)
+async def get_target_settings(target_id: UUID):
+    """Get advanced target settings if any."""
+    try:
+        key = f"target_settings:{target_id}"
+        data = settings_persistence.get(key, {}) or {}
+        return TargetAdvancedSettings(**data)
+    except Exception as e:
+        logger.error(f"Failed to get target settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/{target_id}")
 async def delete_target(
     target_id: UUID,
@@ -243,6 +282,11 @@ async def delete_target(
             # Delete target
             await db.execute(delete(Target).where(Target.id == target_id))
             await db.commit()
+            # Clear settings
+            try:
+                settings_persistence.set(f"target_settings:{target_id}", {})
+            except Exception:
+                pass
             logger.info(f"🗑️ Permanently deleted target and related scans: {target.domain}")
             return {"message": "Target and related scans deleted permanently"}
         else:

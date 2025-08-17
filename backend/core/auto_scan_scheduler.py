@@ -162,7 +162,7 @@ class AutoScanScheduler:
             logger.info(f"🕐 Executing scheduled scan for target {scheduled_scan.target_id}")
             
             # Import here to avoid circular imports
-            from models.scan import Scan, ScanStatus
+            from models.scan import Scan, ScanStatus, Target
             from api.endpoints.scans import execute_scan
             from uuid import UUID
             from sqlalchemy import select
@@ -184,7 +184,6 @@ class AutoScanScheduler:
                 await db.refresh(scan)
                 
                 # Get target domain for execution
-                from models.base import Target
                 target_query = select(Target).where(Target.id == UUID(scheduled_scan.target_id))
                 target_result = await db.execute(target_query)
                 target = target_result.scalar_one_or_none()
@@ -327,6 +326,13 @@ class AutoScanScheduler:
             }
             for scan in self.scheduled_scans.values()
         ]
+    
+    async def execute_now(self, schedule_id: str) -> None:
+        """Manually execute a scheduled scan immediately."""
+        if schedule_id not in self.scheduled_scans:
+            raise KeyError(schedule_id)
+        scheduled_scan = self.scheduled_scans[schedule_id]
+        await self._execute_scheduled_scan(scheduled_scan)
     
     async def _load_scheduled_scans(self):
         """Load scheduled scans from storage."""

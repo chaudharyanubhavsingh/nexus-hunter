@@ -125,8 +125,21 @@ export default function Dashboard() {
         } catch {}
       }
     }
+    const onActivity = () => {
+      try {
+        const raw = localStorage.getItem(getActivityKey())
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) setActivityFeed(parsed)
+        }
+      } catch {}
+    }
     window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    window.addEventListener('nexus-activity-updated' as any, onActivity)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('nexus-activity-updated' as any, onActivity)
+    }
   }, [])
 
   // Subscribe to WebSocket events for live activity
@@ -146,21 +159,36 @@ export default function Dashboard() {
       webSocketService.connect()
     }
 
+    // reflect target CRUD pushed by useApi via localStorage event listener already in place
+
     // scan_update (running/progress/cancelled)
     unsubscribers.push(
       webSocketService.subscribe('scan_update', (data: any) => {
         const status = data?.status
         const progress = typeof data?.progress === 'number' ? ` (${data.progress}%)` : ''
+        const rawMsg = (data?.message || '').toString()
+
+        // Map phases from message content
+        let iconKey = 'activity'
+        if (/subdomain/i.test(rawMsg)) iconKey = 'eye'
+        else if (/port scan/i.test(rawMsg) || /port scanning/i.test(rawMsg)) iconKey = 'activity'
+        else if (/vulnerability test/i.test(rawMsg)) iconKey = 'shield'
+        else if (/analyzing/i.test(rawMsg)) iconKey = 'shield'
+        else if (/report/i.test(rawMsg)) iconKey = 'zap'
+
         const message = status === 'cancelled'
           ? `Scan ${data?.scan_id} cancelled`
-          : `Scan ${data?.scan_id} ${status}${progress}`
+          : rawMsg
+            ? `${rawMsg}${progress}`
+            : `Scan ${data?.scan_id} ${status}${progress}`
+
         addItem({
           id: `${data?.scan_id}-${Date.now()}`,
           type: 'scan_update',
           message,
           timestamp: nowTs(),
           severity: status === 'cancelled' ? 'high' : 'info',
-          iconKey: 'activity',
+          iconKey,
           payload: data
         })
       })
@@ -179,12 +207,98 @@ export default function Dashboard() {
           payload: data
         })
 
-        // Derive vulnerabilities
+        // Derive summary from results
+        try {
+          const results = data?.results || {}
+          const targetDomain = results?.target_domain
+          const subdomains: string[] = Array.isArray(results?.subdomains) ? results.subdomains : []
+          const openPorts: number[] = Array.isArray(results?.open_ports) ? results.open_ports : []
+          const technologies: string[] = Array.isArray(results?.technologies) ? results.technologies : []
+          const vulns: any[] = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : []
+
+          if (targetDomain) {
+            addItem({
+              id: `${data?.scan_id}-summary-target-${Date.now()}`,
+              type: 'scan_update',
+              message: `Target scanned: ${targetDomain}`,
+              timestamp: nowTs(),
+              severity: 'info',
+              iconKey: 'eye',
+              payload: { scan_id: data?.scan_id, targetDomain }
+            })
+          }
+
+          if (subdomains.length > 0) {
+            const first = subdomains.slice(0, 5).join(', ')
+            const more = subdomains.length > 5 ? `, +${subdomains.length - 5} more` : ''
+            addItem({
+              id: `${data?.scan_id}-summary-subdomains-${Date.now()}`,
+              type: 'scan_update',
+              message: `Subdomains (${subdomains.length}): ${first}${more}`,
+              timestamp: nowTs(),
+              severity: 'info',
+              iconKey: 'eye',
+              payload: { scan_id: data?.scan_id, subdomains }
+            })
+          }
+
+          if (openPorts.length > 0) {
+            const ports = openPorts.slice(0, 10).join(', ')
+            const more = openPorts.length > 10 ? `, +${openPorts.length - 10} more` : ''
+            addItem({
+              id: `${data?.scan_id}-summary-ports-${Date.now()}`,
+              type: 'scan_update',
+              message: `Open ports (${openPorts.length}): ${ports}${more}`,
+              timestamp: nowTs(),
+              severity: 'info',
+              iconKey: 'activity',
+              payload: { scan_id: data?.scan_id, openPorts }
+            })
+          }
+
+          if (technologies.length > 0) {
+            const tech = technologies.slice(0, 10).join(', ')
+            const more = technologies.length > 10 ? `, +${technologies.length - 10} more` : ''
+            addItem({
+              id: `${data?.scan_id}-summary-tech-${Date.now()}`,
+              type: 'scan_update',
+              message: `Technologies: ${tech}${more}`,
+              timestamp: nowTs(),
+              severity: 'info',
+              iconKey: 'activity',
+              payload: { scan_id: data?.scan_id, technologies }
+            })
+          }
+
+          // Findings summary
+          if (vulns.length > 0) {
+            const counts = vulns.reduce((acc: any, v: any) => {
+              const s = (v?.severity || 'info').toLowerCase()
+              acc.total += 1
+              if (s === 'critical') acc.critical += 1
+              else if (s === 'high') acc.high += 1
+              else if (s === 'medium') acc.medium += 1
+              else acc.low += 1
+              return acc
+            }, { total: 0, critical: 0, high: 0, medium: 0, low: 0 })
+            addItem({
+              id: `${data?.scan_id}-summary-findings-${Date.now()}`,
+              type: 'scan_update',
+              message: `Findings: ${counts.total} (Critical: ${counts.critical}, High: ${counts.high}, Medium: ${counts.medium}, Low: ${counts.low})`,
+              timestamp: nowTs(),
+              severity: counts.critical > 0 || counts.high > 0 ? 'high' : 'info',
+              iconKey: 'shield',
+              payload: { scan_id: data?.scan_id, counts }
+            })
+          }
+        } catch {}
+
+        // Derive vulnerabilities (individual entries)
         try {
           const results = data?.results || {}
           const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : []
           if (vulns.length > 0) {
-            vulns.slice(0, 20).forEach((v: any, idx: number) => {
+            vulns.slice(0, 50).forEach((v: any, idx: number) => {
               const sev = (v?.severity || 'info').toLowerCase()
               addItem({
                 id: `${data?.scan_id}-vuln-${idx}-${Date.now()}`,

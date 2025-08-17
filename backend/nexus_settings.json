@@ -4,5 +4,45 @@
   "concurrent_scans": 3,
   "scan_timeout": 3600,
   "last_updated": "never",
-  "test_key_fix": "test_value_fix"
+  "test_key_fix": "test_value_fix",
+  "target_settings:19a99e47-99c9-4ba5-9f53-9ed9af7130ac": {
+    "priority": "high",
+    "max_depth": 8,
+    "contact_email": "security@example.com",
+    "rate_limit": 10,
+    "authentication_required": true,
+    "api_config": {
+      "type": "bearer",
+      "token": "TEST_TOKEN"
+    },
+    "notes": "Full advanced test",
+    "scope_rules": [
+      "*.excalidraw.com",
+      "excalidraw.com"
+    ],
+    "out_of_scope": [
+      "staging.excalidraw.com",
+      "dev.excalidraw.com"
+    ]
+  },
+  "target_settings:e4c2ec79-05a0-4d35-a154-e5d297ddc0c3": {
+    "priority": "critical",
+    "max_depth": 9,
+    "contact_email": "security@example.com",
+    "rate_limit": 12,
+    "authentication_required": true,
+    "api_config": {
+      "type": "bearer",
+      "token": "TEST_TOKEN_2"
+    },
+    "notes": "Advanced E2E settings",
+    "scope_rules": [
+      "*.e4c2ec79-05a0-4d35-a154-e5d297ddc0c3",
+      "e4c2ec79-05a0-4d35-a154-e5d297ddc0c3"
+    ],
+    "out_of_scope": [
+      "staging.e4c2ec79-05a0-4d35-a154-e5d297ddc0c3",
+      "dev.e4c2ec79-05a0-4d35-a154-e5d297ddc0c3"
+    ]
+  }
 }
