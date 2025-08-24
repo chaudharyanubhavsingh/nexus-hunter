@@ -146,8 +146,8 @@ async def get_executive_summary(scan_id: UUID, format: str = "markdown", db: Asy
             from agents.report_agent import ReportAgent
             agent = ReportAgent()
             analysis = _build_analysis_from_results(scan.results or {})
-            # Use the enhanced comprehensive HTML report
-            html = await agent._generate_html_report(analysis)
+            # Generate executive-focused HTML report
+            html = await agent._generate_html_report(analysis, report_type="executive")
             return Response(content=html, media_type="text/html")
         else:
             content = _extract_report(scan, "executive")
@@ -173,8 +173,8 @@ async def get_executive_report(scan_id: UUID, format: str = "html", db: AsyncSes
             from agents.report_agent import ReportAgent
             agent = ReportAgent()
             analysis = _build_analysis_from_results(scan.results or {})
-            # Use the enhanced comprehensive HTML report
-            html = await agent._generate_html_report(analysis)
+            # Generate executive-focused HTML report
+            html = await agent._generate_html_report(analysis, report_type="executive")
             return Response(content=html, media_type="text/html")
         else:
             content = _extract_report(scan, "executive")
@@ -200,8 +200,8 @@ async def get_technical_report(scan_id: UUID, format: str = "markdown", db: Asyn
             from agents.report_agent import ReportAgent
             agent = ReportAgent()
             analysis = _build_analysis_from_results(scan.results or {})
-            # Use the enhanced comprehensive HTML report with all styling and features
-            html = await agent._generate_html_report(analysis)
+            # Generate technical-focused HTML report
+            html = await agent._generate_html_report(analysis, report_type="technical")
             return Response(content=html, media_type="text/html")
         else:
             content = _extract_report(scan, "technical")
@@ -246,8 +246,8 @@ async def get_disclosure_report(scan_id: UUID, format: str = "html", db: AsyncSe
             from agents.report_agent import ReportAgent
             agent = ReportAgent()
             analysis = _build_analysis_from_results(scan.results or {})
-            # Use the enhanced comprehensive HTML report
-            html = await agent._generate_html_report(analysis)
+            # Generate disclosure-focused HTML report
+            html = await agent._generate_html_report(analysis, report_type="disclosure")
             return Response(content=html, media_type="text/html")
         else:
             content = _extract_report(scan, "disclosure")
@@ -273,8 +273,8 @@ async def get_technical_report_alias(scan_id: UUID, format: str = "html", db: As
             from agents.report_agent import ReportAgent
             agent = ReportAgent()
             analysis = _build_analysis_from_results(scan.results or {})
-            # Use the enhanced comprehensive HTML report with all styling and features
-            html = await agent._generate_html_report(analysis)
+            # Generate technical-focused HTML report
+            html = await agent._generate_html_report(analysis, report_type="technical")
             return Response(content=html, media_type="text/html")
         else:
             content = _extract_report(scan, "technical")
@@ -310,8 +310,8 @@ async def download_report(scan_id: UUID, report_type: str, format: str = "pdf", 
         filename = f"nexus-hunter-{kind}-security-assessment.{format}"
 
         if format == "html":
-            # Enhanced HTML report with all styling and features
-            html = await agent._generate_html_report(analysis)
+            # Enhanced HTML report with all styling and features - type-specific
+            html = await agent._generate_html_report(analysis, report_type=kind)
             return Response(
                 content=html, 
                 media_type="text/html", 
@@ -338,7 +338,7 @@ async def download_report(scan_id: UUID, report_type: str, format: str = "pdf", 
             # Enhanced PDF generation with exact HTML-to-PDF matching
             try:
                 logger.info(f"Generating enhanced PDF for {kind} report using Playwright...")
-                pdf_bytes = await agent.generate_pdf(analysis)
+                pdf_bytes = await agent.generate_pdf(analysis, report_type=kind)
                 logger.info(f"Enhanced PDF generated successfully: {len(pdf_bytes):,} bytes")
                 return Response(
                     content=pdf_bytes, 

@@ -93,7 +93,7 @@ class ReportAgent(BaseAgent):
             
             # Generate additional formats
             if not self.is_cancelled():
-                html_report = await self._generate_html_report(analysis)
+                html_report = await self._generate_html_report(analysis, report_type="technical")
                 results["reports"]["html_report"] = html_report
                 
                 json_report = await self._generate_json_report(analysis)
@@ -386,8 +386,494 @@ class ReportAgent(BaseAgent):
         
         return emails
     
-    async def _generate_html_report(self, analysis: Dict[str, Any]) -> str:
-        """Generate Premium HTML Security Assessment Report"""
+    async def _generate_executive_html_report(self, analysis: Dict[str, Any]) -> str:
+        """Generate Executive Summary HTML Report - Business focused"""
+        domain = analysis['target_info']['domain']
+        today = datetime.now().strftime('%B %d, %Y')
+        scan_date = datetime.now().strftime('%d %B %Y')
+        time_generated = datetime.now().strftime('%H:%M UTC')
+
+        # Business-focused metrics
+        vulnerabilities = analysis.get('vulnerabilities', [])
+        sev = {
+            'critical': len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'critical']),
+            'high': len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'high']),
+            'medium': len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'medium']),
+            'low': len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'low']),
+        }
+        total_vulns = sum(sev.values())
+        
+        # Business risk assessment
+        risk_score = (sev['critical'] * 10) + (sev['high'] * 7) + (sev['medium'] * 4) + (sev['low'] * 1)
+        risk_level = 'CRITICAL' if risk_score >= 30 else 'HIGH' if risk_score >= 15 else 'MEDIUM' if risk_score >= 5 else 'LOW'
+        business_impact = 'SEVERE' if sev['critical'] > 0 else 'HIGH' if sev['high'] > 0 else 'MODERATE' if sev['medium'] > 0 else 'MINIMAL'
+
+        # Executive dashboard focused on business concerns
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Security Assessment - {domain}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {{
+            --primary: #667eea;
+            --danger: #dc2626;
+            --warning: #ea580c;
+            --success: #059669;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --border: #e2e8f0;
+        }}
+        
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        
+        body {{
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+        }}
+        
+        .report-container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }}
+        
+        .executive-header {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }}
+        
+        .executive-title {{
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }}
+        
+        .executive-subtitle {{
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }}
+        
+        .executive-dashboard {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            padding: 3rem 2rem;
+            background: #f8fafc;
+        }}
+        
+        .dashboard-card {{
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }}
+        
+        .dashboard-metric {{
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .dashboard-label {{
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }}
+        
+        .risk-critical {{ color: var(--danger); }}
+        .risk-high {{ color: var(--warning); }}
+        .risk-medium {{ color: #d97706; }}
+        .risk-low {{ color: var(--success); }}
+        
+        .content-section {{
+            padding: 3rem 2rem;
+        }}
+        
+        .section-title {{
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }}
+        
+        .business-impact {{
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            padding: 2rem;
+            border-radius: 1rem;
+            border-left: 6px solid var(--primary);
+            margin-bottom: 2rem;
+        }}
+        
+        .action-items {{
+            display: grid;
+            gap: 1rem;
+        }}
+        
+        .action-item {{
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            border-left: 4px solid var(--danger);
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }}
+        
+        .action-priority {{
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--danger);
+            margin-bottom: 0.5rem;
+        }}
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <header class="executive-header">
+            <h1 class="executive-title">🔐 Executive Security Assessment</h1>
+            <p class="executive-subtitle">Security Risk Overview for {domain}</p>
+            <div style="margin-top: 2rem; font-size: 0.875rem; opacity: 0.8;">
+                Generated: {today} • Report ID: NEXUS-{datetime.now().strftime('%Y%m%d-%H%M%S')}
+            </div>
+        </header>
+        
+        <section class="executive-dashboard">
+            <div class="dashboard-card">
+                <div class="dashboard-metric risk-{risk_level.lower()}">{risk_score}</div>
+                <div class="dashboard-label">Risk Score</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="dashboard-metric">{total_vulns}</div>
+                <div class="dashboard-label">Vulnerabilities Found</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="dashboard-metric risk-{risk_level.lower()}">{risk_level}</div>
+                <div class="dashboard-label">Risk Level</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="dashboard-metric">{business_impact}</div>
+                <div class="dashboard-label">Business Impact</div>
+            </div>
+        </section>
+        
+        <section class="content-section">
+            <h2 class="section-title">📊 Executive Summary</h2>
+            <div class="business-impact">
+                <h3 style="margin-bottom: 1rem; color: var(--primary);">🎯 Key Business Concerns</h3>
+                <p style="margin-bottom: 1rem;">Our security assessment of <strong>{domain}</strong> identified <strong>{total_vulns} security vulnerabilities</strong> that pose varying levels of risk to your organization.</p>
+                
+                {'<p style="color: var(--danger); font-weight: 600;">⚠️ CRITICAL: Immediate attention required for ' + str(sev['critical']) + ' critical vulnerabilities that could lead to complete system compromise.</p>' if sev['critical'] > 0 else ''}
+                {'<p style="color: var(--warning); font-weight: 600;">🔥 HIGH PRIORITY: ' + str(sev['high']) + ' high-severity issues require urgent remediation to prevent potential data breaches.</p>' if sev['high'] > 0 else ''}
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-top: 2rem;">
+                    <div style="text-align: center; padding: 1rem; background: rgba(220, 38, 38, 0.1); border-radius: 0.5rem;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--danger);">{sev['critical']}</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Critical</div>
+                    </div>
+                    <div style="text-align: center; padding: 1rem; background: rgba(234, 88, 12, 0.1); border-radius: 0.5rem;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--warning);">{sev['high']}</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">High</div>
+                    </div>
+                    <div style="text-align: center; padding: 1rem; background: rgba(217, 119, 6, 0.1); border-radius: 0.5rem;">
+                        <div style="font-size: 2rem; font-weight: 700; color: #d97706;">{sev['medium']}</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Medium</div>
+                    </div>
+                    <div style="text-align: center; padding: 1rem; background: rgba(5, 150, 105, 0.1); border-radius: 0.5rem;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--success);">{sev['low']}</div>
+                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Low</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="content-section" style="background: var(--bg-secondary);">
+            <h2 class="section-title">⚡ Immediate Action Items</h2>
+            <div class="action-items">
+                {'<div class="action-item"><div class="action-priority">IMMEDIATE</div><strong>Address Critical Vulnerabilities:</strong> Deploy emergency patches for ' + str(sev['critical']) + ' critical vulnerabilities within 24 hours to prevent system compromise.</div>' if sev['critical'] > 0 else ''}
+                {'<div class="action-item" style="border-left-color: var(--warning);"><div class="action-priority" style="color: var(--warning);">URGENT</div><strong>Remediate High-Risk Issues:</strong> Schedule immediate fixes for ' + str(sev['high']) + ' high-severity vulnerabilities within 7 days.</div>' if sev['high'] > 0 else ''}
+                <div class="action-item" style="border-left-color: var(--primary);">
+                    <div class="action-priority" style="color: var(--primary);">STRATEGIC</div>
+                    <strong>Security Review:</strong> Conduct comprehensive security policy review and implement ongoing monitoring.
+                </div>
+                <div class="action-item" style="border-left-color: var(--success);">
+                    <div class="action-priority" style="color: var(--success);">ONGOING</div>
+                    <strong>Staff Training:</strong> Implement security awareness training for development and operations teams.
+                </div>
+            </div>
+        </section>
+        
+        <footer style="background: var(--text-primary); color: white; padding: 2rem; text-align: center;">
+            <p style="margin-bottom: 0.5rem;">Generated by <strong>Nexus Hunter</strong> Autonomous Security Platform</p>
+            <p style="font-size: 0.875rem; opacity: 0.8;">Professional Security Assessment • {time_generated}</p>
+        </footer>
+    </div>
+</body>
+</html>"""
+        
+        return html
+
+    async def _generate_disclosure_html_report(self, analysis: Dict[str, Any]) -> str:
+        """Generate Disclosure Communication HTML Report - Professional disclosure focused"""
+        domain = analysis['target_info']['domain']
+        today = datetime.now().strftime('%B %d, %Y')
+        vulnerabilities = analysis.get('vulnerabilities', [])
+        
+        # Disclosure-specific metrics
+        critical_vulns = [v for v in vulnerabilities if (v.get('severity') or '').lower() == 'critical']
+        high_vulns = [v for v in vulnerabilities if (v.get('severity') or '').lower() == 'high']
+        total_vulns = len(vulnerabilities)
+        
+        # Determine urgency and timeline
+        if critical_vulns:
+            urgency = "immediate attention"
+            timeline = "within 24 hours"
+            severity_class = "critical"
+        elif high_vulns:
+            urgency = "prompt attention"
+            timeline = "within 7 days"
+            severity_class = "high"
+        else:
+            urgency = "scheduled remediation"
+            timeline = "within 30 days"
+            severity_class = "medium"
+
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Vulnerability Disclosure - {domain}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {{
+            --primary: #2563eb;
+            --success: #059669;
+            --warning: #ea580c;
+            --danger: #dc2626;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --border: #e2e8f0;
+        }}
+        
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        
+        body {{
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            padding: 2rem;
+        }}
+        
+        .disclosure-container {{
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }}
+        
+        .disclosure-header {{
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }}
+        
+        .disclosure-title {{
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .disclosure-subtitle {{
+            opacity: 0.9;
+            font-size: 1rem;
+        }}
+        
+        .disclosure-content {{
+            padding: 2rem;
+        }}
+        
+        .section {{
+            margin-bottom: 2rem;
+        }}
+        
+        .section-title {{
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--primary);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 0.5rem;
+        }}
+        
+        .vulnerability-summary {{
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            border-left: 4px solid var(--primary);
+            margin-bottom: 2rem;
+        }}
+        
+        .vuln-item {{
+            background: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            border-left: 3px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }}
+        
+        .vuln-item.critical {{ border-left-color: var(--danger); }}
+        .vuln-item.high {{ border-left-color: var(--warning); }}
+        .vuln-item.medium {{ border-left-color: #d97706; }}
+        .vuln-item.low {{ border-left-color: var(--success); }}
+        
+        .timeline-box {{
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            border-left: 4px solid var(--success);
+        }}
+        
+        .contact-info {{
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            text-align: center;
+        }}
+    </style>
+</head>
+<body>
+    <div class="disclosure-container">
+        <header class="disclosure-header">
+            <h1 class="disclosure-title">🔒 Security Vulnerability Disclosure</h1>
+            <p class="disclosure-subtitle">Responsible Security Research Communication</p>
+        </header>
+        
+        <div class="disclosure-content">
+            <div class="section">
+                <div style="text-align: center; margin-bottom: 2rem; padding: 1rem; background: var(--bg-secondary); border-radius: 0.5rem;">
+                    <strong>To:</strong> Security Team - {domain}<br>
+                    <strong>Date:</strong> {today}<br>
+                    <strong>Subject:</strong> Security Vulnerability Disclosure
+                </div>
+                
+                <p style="margin-bottom: 1.5rem;">Dear Security Team,</p>
+                <p style="margin-bottom: 1.5rem;">I hope this communication finds you well. I am reaching out to responsibly disclose security vulnerabilities discovered during a security assessment of <strong>{domain}</strong>.</p>
+            </div>
+            
+            <div class="section">
+                <h2 class="section-title">📋 Summary</h2>
+                <div class="vulnerability-summary">
+                    <p style="margin-bottom: 1rem;">
+                        I have identified <strong>{total_vulns}</strong> security {'vulnerability' if total_vulns == 1 else 'vulnerabilities'} affecting your application, requiring <strong>{urgency}</strong>.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem; text-align: center;">
+                        <div style="background: rgba(220, 38, 38, 0.1); padding: 1rem; border-radius: 0.5rem;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--danger);">{len(critical_vulns)}</div>
+                            <div style="font-size: 0.875rem;">Critical</div>
+                        </div>
+                        <div style="background: rgba(234, 88, 12, 0.1); padding: 1rem; border-radius: 0.5rem;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--warning);">{len(high_vulns)}</div>
+                            <div style="font-size: 0.875rem;">High</div>
+                        </div>
+                        <div style="background: rgba(37, 99, 235, 0.1); padding: 1rem; border-radius: 0.5rem;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">{total_vulns}</div>
+                            <div style="font-size: 0.875rem;">Total</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2 class="section-title">🔍 Vulnerability Overview</h2>"""
+        
+        # Add vulnerability items
+        for i, vuln in enumerate(vulnerabilities[:5]):  # Limit to top 5 for disclosure
+            severity = (vuln.get('severity') or 'info').lower()
+            html += f"""
+                <div class="vuln-item {severity}">
+                    <strong>{i+1}. {vuln.get('title', 'Security Vulnerability')}</strong><br>
+                    <span style="font-size: 0.875rem; color: var(--text-secondary);">
+                        Severity: <strong>{severity.upper()}</strong> • 
+                        Location: {vuln.get('url', 'Multiple locations')} • 
+                        Category: {vuln.get('category', 'Security Issue')}
+                    </span>
+                </div>"""
+        
+        if len(vulnerabilities) > 5:
+            html += f"""
+                <div style="text-align: center; margin-top: 1rem; font-style: italic; color: var(--text-secondary);">
+                    ... and {len(vulnerabilities) - 5} additional vulnerabilities
+                </div>"""
+        
+        html += f"""
+            </div>
+            
+            <div class="section">
+                <h2 class="section-title">📅 Proposed Timeline</h2>
+                <div class="timeline-box">
+                    <p style="margin-bottom: 1rem;">
+                        <strong>Recommended Action:</strong> I recommend addressing these findings <strong>{timeline}</strong> based on their severity levels.
+                    </p>
+                    <p>I am happy to provide additional technical details and assist with remediation if needed.</p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2 class="section-title">🤝 Responsible Disclosure</h2>
+                <p style="margin-bottom: 1rem;">I am committed to responsible disclosure practices and will:</p>
+                <ul style="margin-left: 2rem; margin-bottom: 1rem;">
+                    <li>Keep these findings confidential until they are resolved</li>
+                    <li>Provide reasonable time for remediation</li>
+                    <li>Work collaboratively on any clarifications needed</li>
+                    <li>Respect your disclosure timeline and preferences</li>
+                </ul>
+                <p>Please confirm receipt of this report and let me know your preferred method for sharing detailed technical information securely.</p>
+            </div>
+            
+            <div class="contact-info">
+                <h3 style="margin-bottom: 1rem; color: var(--primary);">📞 Contact Information</h3>
+                <p style="margin-bottom: 0.5rem;"><strong>Security Research Team</strong></p>
+                <p style="color: var(--text-secondary);">Nexus Hunter Security Platform</p>
+                <p style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary);">
+                    This disclosure was generated by Nexus Hunter Autonomous Security Platform
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+        
+        return html
+
+    async def _generate_html_report(self, analysis: Dict[str, Any], report_type: str = "technical") -> str:
+        """Generate HTML report based on type"""
+        if report_type == "executive":
+            return await self._generate_executive_html_report(analysis)
+        elif report_type == "disclosure":
+            return await self._generate_disclosure_html_report(analysis)
+        else:  # technical report (default)
+            return await self._generate_technical_html_report(analysis)
+    
+    async def _generate_technical_html_report(self, analysis: Dict[str, Any]) -> str:
+        """Generate Technical HTML Security Assessment Report - Full technical details"""
         # Enhanced professional report with modern design, charts, and visual elements
         md_report = await self._generate_technical_report(analysis)
         domain = analysis['target_info']['domain']
@@ -1623,10 +2109,10 @@ class ReportAgent(BaseAgent):
          """
         return html
 
-    async def _generate_pdf_optimized_html(self, analysis: Dict[str, Any]) -> str:
+    async def _generate_pdf_optimized_html(self, analysis: Dict[str, Any], report_type: str = "technical") -> str:
         """Generate HTML specifically optimized for PDF rendering with inline styles."""
         # Get the base HTML
-        base_html = await self._generate_html_report(analysis)
+        base_html = await self._generate_html_report(analysis, report_type)
         
         # Replace CSS variables with actual values for better PDF compatibility
         css_variables = {
@@ -1721,14 +2207,14 @@ class ReportAgent(BaseAgent):
         
         return optimized_html
 
-    async def generate_pdf(self, analysis: Dict[str, Any]) -> bytes:
+    async def generate_pdf(self, analysis: Dict[str, Any], report_type: str = "technical") -> bytes:
         """Generate a professional PDF that matches the HTML report exactly."""
         try:
             from weasyprint import HTML, CSS
             from weasyprint.text.fonts import FontConfiguration
             
             # Generate enhanced HTML with PDF-optimized styling
-            html_content = await self._generate_pdf_optimized_html(analysis)
+            html_content = await self._generate_pdf_optimized_html(analysis, report_type)
             
             # Configure fonts for better PDF rendering
             font_config = FontConfiguration()
@@ -1792,19 +2278,19 @@ class ReportAgent(BaseAgent):
             
         except ImportError:
             logger.warning("WeasyPrint not available, trying alternative PDF generation...")
-            return await self._generate_fallback_pdf(analysis)
+            return await self._generate_fallback_pdf(analysis, report_type)
         except Exception as e:
             logger.error(f"WeasyPrint PDF generation failed: {e}")
-            return await self._generate_fallback_pdf(analysis)
+            return await self._generate_fallback_pdf(analysis, report_type)
     
-    async def _generate_fallback_pdf(self, analysis: Dict[str, Any]) -> bytes:
+    async def _generate_fallback_pdf(self, analysis: Dict[str, Any], report_type: str = "technical") -> bytes:
         """Fallback PDF generation using Playwright for exact HTML rendering."""
         try:
             # Try Playwright for exact HTML-to-PDF conversion
             from playwright.async_api import async_playwright
             
             # Use the main HTML generation method for Playwright (it has all the styling)
-            html_content = await self._generate_html_report(analysis)
+            html_content = await self._generate_html_report(analysis, report_type)
             
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
@@ -1828,17 +2314,17 @@ class ReportAgent(BaseAgent):
                 
         except ImportError:
             logger.warning("Playwright not available, trying pdfkit...")
-            return await self._generate_pdfkit_fallback(analysis)
+            return await self._generate_pdfkit_fallback(analysis, report_type)
         except Exception as e:
             logger.error(f"Playwright PDF generation failed: {e}")
-            return await self._generate_pdfkit_fallback(analysis)
+            return await self._generate_pdfkit_fallback(analysis, report_type)
     
-    async def _generate_pdfkit_fallback(self, analysis: Dict[str, Any]) -> bytes:
+    async def _generate_pdfkit_fallback(self, analysis: Dict[str, Any], report_type: str = "technical") -> bytes:
         """Fallback to pdfkit if available."""
         try:
             import pdfkit
             # Use the main HTML generation method
-            html_content = await self._generate_html_report(analysis)
+            html_content = await self._generate_html_report(analysis, report_type)
             
             # Configure pdfkit options for better PDF output
             options = {
@@ -1863,9 +2349,9 @@ class ReportAgent(BaseAgent):
             
         except Exception as e:
             logger.error(f"pdfkit PDF generation failed: {e}")
-            return await self._generate_reportlab_pdf(analysis)
+            return await self._generate_reportlab_pdf(analysis, report_type)
     
-    async def _generate_reportlab_pdf(self, analysis: Dict[str, Any]) -> bytes:
+    async def _generate_reportlab_pdf(self, analysis: Dict[str, Any], report_type: str = "technical") -> bytes:
         """Generate PDF using ReportLab as final fallback."""
         try:
             from reportlab.lib.pagesizes import A4
@@ -1967,7 +2453,7 @@ class ReportAgent(BaseAgent):
         except Exception as e:
             logger.error(f"ReportLab PDF generation failed: {e}")
             # Final fallback to enhanced HTML as bytes
-            html = await self._generate_html_report(analysis)
+            html = await self._generate_html_report(analysis, report_type)
             return html.encode('utf-8', errors='ignore')
     
     async def _generate_json_report(self, analysis: Dict[str, Any]) -> str:
