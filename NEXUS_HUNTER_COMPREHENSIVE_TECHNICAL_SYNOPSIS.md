@@ -1904,55 +1904,133 @@ OWASP_TOP_10_COVERAGE = {
 ---
 
 ## 💻 Technical Implementation
+
+### Core Architecture Components
+
+#### 1. **AI Brain System** (`ai_brain.py`)
+
+```python
+class AIBrain:
+    """
+    Central AI Brain - Master Controller with Security Expert Intelligence
+    
+    This system acts as the brain of Nexus Hunter with the expertise of a 
+    5+ year bug bounty hunter, making intelligent decisions about:
+    - Scan strategies and agent selection
+    - Vulnerability assessment approaches  
+    - Exploitation techniques and safety
+    - Report generation strategies
+    - Real-time workflow optimization
+    """
+    
+    def __init__(self):
+        self.intelligence_level = IntelligenceLevel.EXPERT
+        self.decision_history: List[Dict[str, Any]] = []
+        self.system_architecture = self._initialize_architecture()
+        self.expert_persona = {
+            "years_experience": 5,
+            "specializations": [
+                "Web Application Security", "API Security", 
+                "Network Penetration Testing", "Business Logic Vulnerabilities",
+                "Advanced Exploitation Techniques", "Responsible Disclosure"
+            ],
+            "mindset": "methodical, thorough, ethical, results-driven",
+            "approach": "comprehensive reconnaissance → targeted exploitation → responsible disclosure"
+        }
+```
+
+#### 2. **Enhanced Scan Orchestrator** (`enhanced_scan_orchestrator.py`)
+
+```python
+class EnhancedScanOrchestrator:
+    """
+    Professional Security Scan Orchestrator
+    Coordinates three main security agents for comprehensive security assessments
+    """
+    
+    def __init__(self):
+        self.controller = AgenticController()
+        # Initialize three main orchestrator agents
+        self.agents = {
+            "ReconAgent": ReconAgent(),
+            "ExploitAgent": ExploitAgent(), 
+            "ReportAgent": ReportAgent()
+        }
+        
+        # Define professional scan workflows
+        self.scan_workflows = {
+            "reconnaissance": self._reconnaissance_workflow,
+            "vulnerability_exploitation": self._vulnerability_exploitation_workflow,
+            "reporting": self._reporting_workflow,
+            "full": self._full_security_audit_workflow,
+            "fast": self._fast_scan_workflow,
+            "deep": self._deep_scan_workflow
+        }
+```
+
+### Agent Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "🧠 AI Brain Layer"
+        AIB[AI Brain Controller<br/>🎯 Master Intelligence<br/>📊 5+ Years Bug Bounty Expertise]
+        GEMINI[Gemini API Integration<br/>🤖 Advanced Language Model]
+        PROMPTS[Expert Prompt Engine<br/>📝 Security Context Aware]
+    end
+    
+    subgraph "🎯 Main Orchestrators"
+        RECON[🔍 ReconAgent<br/>📡 7+ Reconnaissance Specialists]
+        EXPLOIT[⚡ ExploitAgent<br/>🛡️ 25+ Exploitation & Vuln Agents]
+        REPORT[📊 ReportAgent<br/>📝 5+ Reporting Specialists]
     end
     
     subgraph "🔍 Reconnaissance Agents"
-        SUB[SubfinderAgent<br/>Subdomain Discovery]
-        AMASS[AmassAgent<br/>Advanced Enumeration]
-        NAABU[NaabuAgent<br/>Port Scanning]
-        HTTPX[HttpxAgent<br/>Service Detection]
-        OSINT[OSINTAgent<br/>Intelligence Gathering]
-        GIT[GitHubAgent<br/>Code Analysis]
-        ASSET[AssetFinderAgent<br/>Asset Discovery]
+        SUB[SubfinderAgent<br/>🌐 Subdomain Discovery]
+        AMASS[AmassAgent<br/>🔍 Advanced Enumeration]
+        NAABU[NaabuAgent<br/>🔌 Port Scanning]
+        HTTPX[HttpxAgent<br/>🌐 Service Detection]
+        OSINT[OSINTAgent<br/>🕵️ Intelligence Gathering]
+        GIT[GitHubAgent<br/>💻 Code Analysis]
+        ASSET[AssetFinderAgent<br/>🎯 Asset Discovery]
     end
     
     subgraph "⚡ Exploitation Agents"
-        SQLI[SQLInjectionAgent<br/>Database Attacks]
-        XSSA[XSSAgent<br/>Cross-Site Scripting]
-        RCEA[RCEAgent<br/>Command Execution]
-        SSRFA[SSRFAgent<br/>Request Forgery]
-        LFI[LFIAgent<br/>File Inclusion]
-        XXE[XXEAgent<br/>XML Attacks]
-        DESER[DeserializationAgent<br/>Object Attacks]
-        NOSQL[NoSQLInjectionAgent<br/>NoSQL Attacks]
-        LDAP[LDAPInjectionAgent<br/>Directory Attacks]
-        TMPL[TemplateInjectionAgent<br/>Template Attacks]
-        UPLOAD[FileUploadAgent<br/>Upload Attacks]
-        BIZ[BusinessLogicAgent<br/>Logic Flaws]
-        CMD[CommandInjectionAgent<br/>OS Commands]
-        SQLMAP[SQLMapAgent<br/>Advanced SQL]
-        ADVXSS[AdvancedXSSAgent<br/>Complex XSS]
+        SQLI[SQLInjectionAgent<br/>💉 Database Attacks]
+        XSSA[XSSAgent<br/>🌐 Cross-Site Scripting]
+        RCEA[RCEAgent<br/>⚡ Command Execution]
+        SSRFA[SSRFAgent<br/>🌐 Request Forgery]
+        LFI[LFIAgent<br/>📁 File Inclusion]
+        XXE[XXEAgent<br/>📄 XML Attacks]
+        DESER[DeserializationAgent<br/>🔧 Object Attacks]
+        NOSQL[NoSQLInjectionAgent<br/>📊 NoSQL Attacks]
+        LDAP[LDAPInjectionAgent<br/>📁 Directory Attacks]
+        TMPL[TemplateInjectionAgent<br/>📝 Template Attacks]
+        UPLOAD[FileUploadAgent<br/>📁 Upload Attacks]
+        BIZ[BusinessLogicAgent<br/>🧠 Logic Flaws]
+        CMD[CommandInjectionAgent<br/>⚡ OS Commands]
+        SQLMAP[SQLMapAgent<br/>🔧 Advanced SQL]
+        ADVXSS[AdvancedXSSAgent<br/>🌐 Complex XSS]
     end
     
     subgraph "🛡️ Vulnerability Assessment"
-        NUCLEI[NucleiAgent<br/>Template Scanning]
-        FFUF[FfufAgent<br/>Web Fuzzing]
-        WAFW00F[Wafw00fAgent<br/>WAF Detection]
-        SSLTLS[SSLTLSAgent<br/>Certificate Analysis]
-        APISEC[APISecurityAgent<br/>API Testing]
-        JWT[JWTSecurityAgent<br/>Token Analysis]
-        WS[WebSocketSecurityAgent<br/>WS Testing]
-        SECRET[SecretsAgent<br/>Credential Scanning]
-        SUPPLY[SupplyChainAgent<br/>Dependency Analysis]
-        AIML[AIMLSecurityAgent<br/>AI System Testing]
+        NUCLEI[NucleiAgent<br/>🎯 Template Scanning]
+        FFUF[FfufAgent<br/>🔍 Web Fuzzing]
+        WAFW00F[Wafw00fAgent<br/>🛡️ WAF Detection]
+        SSLTLS[SSLTLSAgent<br/>🔐 Certificate Analysis]
+        APISEC[APISecurityAgent<br/>🌐 API Testing]
+        JWT[JWTSecurityAgent<br/>🎫 Token Analysis]
+        WS[WebSocketSecurityAgent<br/>⚡ WS Testing]
+        SECRET[SecretsAgent<br/>🔑 Credential Scanning]
+        SUPPLY[SupplyChainAgent<br/>📦 Dependency Analysis]
+        AIML[AIMLSecurityAgent<br/>🤖 AI System Testing]
     end
     
     subgraph "📊 Reporting Agents"
-        VULNREP[VulnerabilityReportAgent<br/>Technical Reports]
-        EXECREP[ExecutiveReportAgent<br/>Business Reports]
-        PDFGEN[PDFReportGenerator<br/>PDF Export]
-        HTMLGEN[HTMLReportGenerator<br/>Web Reports]
-        JSONGEN[JSONReportGenerator<br/>API Reports]
+        VULNREP[VulnerabilityReportAgent<br/>📊 Technical Reports]
+        EXECREP[ExecutiveReportAgent<br/>👔 Business Reports]
+        PDFGEN[PDFReportGenerator<br/>📄 PDF Export]
+        HTMLGEN[HTMLReportGenerator<br/>🌐 Web Reports]
+        JSONGEN[JSONReportGenerator<br/>🔧 API Reports]
     end
     
     AIB --> RECON
@@ -1989,12 +2067,12 @@ OWASP_TOP_10_COVERAGE = {
     REPORT --> HTMLGEN
     REPORT --> JSONGEN
     
-    classDef aiClass fill:#ff6b6b,stroke:#333,stroke-width:3px
-    classDef orchestratorClass fill:#ffa726,stroke:#333,stroke-width:2px
-    classDef reconClass fill:#66bb6a,stroke:#333,stroke-width:2px
-    classDef exploitClass fill:#ef5350,stroke:#333,stroke-width:2px
-    classDef vulnClass fill:#42a5f5,stroke:#333,stroke-width:2px
-    classDef reportClass fill:#ab47bc,stroke:#333,stroke-width:2px
+    classDef aiClass fill:#ff6b6b,stroke:#333,stroke-width:3px,color:#fff
+    classDef orchestratorClass fill:#ffa726,stroke:#333,stroke-width:2px,color:#fff
+    classDef reconClass fill:#66bb6a,stroke:#333,stroke-width:2px,color:#fff
+    classDef exploitClass fill:#ef5350,stroke:#333,stroke-width:2px,color:#fff
+    classDef vulnClass fill:#42a5f5,stroke:#333,stroke-width:2px,color:#fff
+    classDef reportClass fill:#ab47bc,stroke:#333,stroke-width:2px,color:#fff
     
     class AIB,GEMINI,PROMPTS aiClass
     class RECON,EXPLOIT,REPORT orchestratorClass
@@ -2049,9 +2127,100 @@ sequenceDiagram
     UI->>User: Show Results
 ```
 
+#### 3. **Agent Orchestration Pattern**
+
+```python
+class ExploitAgent(BaseAgent):
+    """Orchestrates all exploitation and vulnerability testing agents"""
+    
+    def __init__(self):
+        super().__init__("ExploitAgent")
+        
+        # Initialize all exploitation agents
+        self.exploitation_agents = {
+            "sql_injection": SQLInjectionAgent(),
+            "xss": AdvancedXSSAgent(),
+            "rce": RCEAgent(),
+            "ssrf": SSRFAgent(),
+            "lfi": LFIAgent(),
+            "xxe": XXEAgent(),
+            "deserialization": DeserializationAgent(),
+            "nosql_injection": NoSQLInjectionAgent(),
+            "ldap_injection": LDAPInjectionAgent(),
+            "template_injection": TemplateInjectionAgent(),
+            "file_upload": FileUploadAgent(),
+            "business_logic": BusinessLogicAgent(),
+            "command_injection": EnhancedCommandInjectionAgent(),
+            "sqlmap": SQLMapAgent(),
+            "advanced_xss": XSSAgent()
+        }
+        
+        # Initialize all vulnerability assessment agents
+        self.vulnerability_agents = {
+            "nuclei": NucleiAgent(),
+            "ffuf": FfufAgent(),
+            "wafw00f": Wafw00fAgent(),
+            "ssl_tls": SSLTLSAgent(),
+            "api_security": APISecurityAgent(),
+            "jwt_security": JWTSecurityAgent(),
+            "websocket_security": WebSocketSecurityAgent(),
+            "secrets": SecretsAgent(),
+            "supply_chain": SupplyChainSecurityAgent(),
+            "ai_ml_security": AIMLSecurityAgent()
+        }
+        
+        # Combined agent registry
+        self.all_agents = {**self.exploitation_agents, **self.vulnerability_agents}
+```
+
+### Performance Optimization Techniques
+
+#### 1. **Asynchronous Agent Execution**
+
+```python
+async def execute_agents_parallel(self, agents: List[BaseAgent], target_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute multiple agents in parallel for maximum efficiency"""
+    tasks = []
+    for agent_name, agent in agents.items():
+        task = asyncio.create_task(
+            agent.execute(target_data),
+            name=f"agent_{agent_name}"
+        )
+        tasks.append((agent_name, task))
+    
+    results = {}
+    for agent_name, task in tasks:
+        try:
+            result = await task
+            results[agent_name] = result
+        except Exception as e:
+            logger.error(f"Agent {agent_name} failed: {e}")
+            results[agent_name] = {"error": str(e)}
+    
+    return results
+```
+
+#### 2. **Resource Management & Efficiency**
+
+```python
+def _calculate_efficiency_score(self) -> float:
+    """Calculate scan efficiency score"""
+    if not self.completed_tasks:
+        return 0.0
+    
+    successful_tasks = [t for t in self.completed_tasks if t.status == AgentStatus.COMPLETED]
+    efficiency = (len(successful_tasks) / len(self.completed_tasks)) * 100
+    
+    # Factor in execution time efficiency
+    avg_execution_time = sum(t.execution_time for t in successful_tasks) / len(successful_tasks)
+    time_efficiency = max(0, 100 - (avg_execution_time / 60))  # Penalize long executions
+    
+    return (efficiency + time_efficiency) / 2
+```
+
 ---
 
-## 💻 Technical Implementation
+## 🧠 AI-Driven Decision Making
 
 ### Core Architecture Components
 
