@@ -1,0 +1,75 @@
+author: Nexus Hunter
+created_at: '2025-08-24T16:39:29.118240'
+description: Fast reconnaissance for quick assessments
+global_config:
+  concurrent_agents: 3
+  minimal_output: true
+  speed_optimized: true
+id: quick_recon
+metadata:
+  estimated_duration: 600
+  resource_requirements: low
+  tags:
+  - reconnaissance
+  - quick
+  - lightweight
+name: Quick Reconnaissance
+notifications:
+  channels:
+  - webhook
+  on_completion: true
+steps:
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - subdomain_discovery
+  condition: null
+  config:
+    quick_mode: true
+    sources: essential
+  dependencies: []
+  description: Basic subdomain discovery
+  id: basic_discovery
+  name: Basic Discovery
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 1
+  timeout: 300
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - port_scanning
+  condition: null
+  config:
+    profile: quick
+    top_ports: 100
+  dependencies:
+  - basic_discovery
+  description: Quick port probe
+  id: port_probe
+  name: Port Probing
+  parallel_group: quick_scan
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 1
+  timeout: 300
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - web_technology
+  condition: null
+  config:
+    basic_fingerprinting: true
+  dependencies:
+  - basic_discovery
+  description: Web service detection
+  id: web_probe
+  name: Web Service Probing
+  parallel_group: quick_scan
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - medium
+  retry_count: 1
+  timeout: 300
+triggers:
+- enabled: true
+  type: manual
+- enabled: true
+  type: api_triggered
+type: !!python/object/apply:agents.workflows.engine.WorkflowType
+- reconnaissance
+version: '1.0'

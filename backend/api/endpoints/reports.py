@@ -33,16 +33,193 @@ def _build_analysis_from_results(results: Dict[str, Any]) -> Dict[str, Any]:
             'risk_assessment': {'overall_risk': 'Low', 'risk_score': 0, 'key_concerns': [], 'immediate_actions': []},
             'recommendations': [],
         }
-    vulns = results.get('vulnerabilities', []) or []
+    # Extract vulnerabilities from both flat format and agent-specific format
+    vulns = []
+    
+    # Check for flat vulnerabilities array (legacy format)
+    if 'vulnerabilities' in results and isinstance(results['vulnerabilities'], list):
+        vulns.extend(results['vulnerabilities'])
+    
+    # Check agent-specific results (new format)
+    for agent_name, agent_results in results.items():
+        if isinstance(agent_results, dict) and 'vulnerabilities' in agent_results:
+            agent_vulns = agent_results['vulnerabilities']
+            if isinstance(agent_vulns, list):
+                vulns.extend(agent_vulns)
+    
+    # Enhance vulnerability data with proper titles and formatting
+    enhanced_vulns = []
+    for i, vuln in enumerate(vulns):
+        if isinstance(vuln, dict):
+            enhanced_vuln = vuln.copy()
+            
+            # Generate proper title if missing or N/A
+            if not enhanced_vuln.get('title') or enhanced_vuln.get('title') in ['N/A', 'Unknown', '']:
+                vuln_type = enhanced_vuln.get('vulnerability_type', 'security_issue')
+                url = enhanced_vuln.get('url', 'Unknown Location')
+                parameter = enhanced_vuln.get('parameter', '')
+                
+                # Create meaningful titles based on vulnerability type
+                if vuln_type == 'confirmed_sql_injection':
+                    param_info = f" (parameter: {parameter})" if parameter else ""
+                    enhanced_vuln['title'] = f"SQL Injection in {url}{param_info}"
+                elif vuln_type == 'local_file_inclusion' or 'lfi' in vuln_type.lower():
+                    param_info = f" (parameter: {parameter})" if parameter else ""
+                    enhanced_vuln['title'] = f"Local File Inclusion in {url}{param_info}"
+                elif 'xss' in vuln_type.lower() or enhanced_vuln.get('xss_type'):
+                    param_info = f" (parameter: {parameter})" if parameter else ""
+                    enhanced_vuln['title'] = f"Cross-Site Scripting (XSS) in {url}{param_info}"
+                elif vuln_type == 'command_injection' or 'rce' in vuln_type.lower():
+                    param_info = f" (parameter: {parameter})" if parameter else ""
+                    enhanced_vuln['title'] = f"Command Injection in {url}{param_info}"
+                elif vuln_type == 'ssrf' or 'server_side_request_forgery' in vuln_type.lower():
+                    param_info = f" (parameter: {parameter})" if parameter else ""
+                    enhanced_vuln['title'] = f"Server-Side Request Forgery in {url}{param_info}"
+                else:
+                    # Use vulnerability type as title with proper formatting
+                    type_name = vuln_type.replace('_', ' ').title()
+                    if type_name in ['N/A', 'Security Issue', '']:
+                        type_name = 'Security Vulnerability'
+                    param_info = f" (parameter: {parameter})" if parameter else ""
+                    enhanced_vuln['title'] = f"{type_name} in {url}{param_info}"
+            
+            # Generate description if missing or N/A
+            if not enhanced_vuln.get('description') or enhanced_vuln.get('description') in ['N/A', 'Unknown', '']:
+                vuln_type = enhanced_vuln.get('vulnerability_type', 'security_issue')
+                payload = enhanced_vuln.get('payload', enhanced_vuln.get('payload_used', ''))
+                evidence = enhanced_vuln.get('evidence', '')
+                
+                if vuln_type == 'confirmed_sql_injection':
+                    enhanced_vuln['description'] = f"SQL injection vulnerability confirmed. Payload: {payload[:100]}{'...' if len(payload) > 100 else ''}"
+                elif vuln_type == 'local_file_inclusion' or 'lfi' in vuln_type.lower():
+                    file_detected = enhanced_vuln.get('file_detected', enhanced_vuln.get('file_path', 'system files'))
+                    enhanced_vuln['description'] = f"Local file inclusion vulnerability allowing access to {file_detected}"
+                elif 'xss' in vuln_type.lower():
+                    xss_type = enhanced_vuln.get('xss_type', 'reflected')
+                    enhanced_vuln['description'] = f"Cross-site scripting ({xss_type}) vulnerability allowing script injection"
+                elif vuln_type == 'command_injection' or 'rce' in vuln_type.lower():
+                    enhanced_vuln['description'] = f"Command injection vulnerability allowing remote code execution"
+                elif vuln_type == 'ssrf':
+                    enhanced_vuln['description'] = f"Server-side request forgery vulnerability allowing internal network access"
+                else:
+                    # Generic description with available evidence
+                    desc = f"Security vulnerability of type {vuln_type.replace('_', ' ')}"
+                    if evidence:
+                        desc += f". Evidence: {evidence[:100]}{'...' if len(evidence) > 100 else ''}"
+                    enhanced_vuln['description'] = desc
+            
+            # Ensure severity is properly formatted
+            if enhanced_vuln.get('severity'):
+                severity = enhanced_vuln['severity'].upper()
+                # Map any non-standard severities
+                if severity not in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+                    if 'crit' in severity.lower():
+                        severity = 'CRITICAL'
+                    elif 'high' in severity.lower():
+                        severity = 'HIGH'
+                    elif 'med' in severity.lower():
+                        severity = 'MEDIUM'
+                    else:
+                        severity = 'MEDIUM'  # Default for unknown
+                enhanced_vuln['severity'] = severity
+            else:
+                # Assign severity based on vulnerability type if missing
+                vuln_type = enhanced_vuln.get('vulnerability_type', '')
+                if vuln_type == 'confirmed_sql_injection':
+                    enhanced_vuln['severity'] = 'CRITICAL'
+                elif 'command_injection' in vuln_type or 'rce' in vuln_type:
+                    enhanced_vuln['severity'] = 'CRITICAL'
+                elif 'xss' in vuln_type.lower():
+                    enhanced_vuln['severity'] = 'HIGH'
+                elif 'lfi' in vuln_type.lower():
+                    enhanced_vuln['severity'] = 'HIGH'
+                elif 'ssrf' in vuln_type.lower():
+                    enhanced_vuln['severity'] = 'HIGH'
+                else:
+                    enhanced_vuln['severity'] = 'MEDIUM'
+            
+            # Add vulnerability ID for tracking
+            enhanced_vuln['id'] = f"NEXUS-{i+1:03d}"
+            
+            # Ensure URL is properly formatted
+            if enhanced_vuln.get('url') and not enhanced_vuln['url'].startswith(('http://', 'https://')):
+                enhanced_vuln['url'] = f"http://{enhanced_vuln['url']}"
+            
+            enhanced_vulns.append(enhanced_vuln)
+        # Skip non-dict items (like string keys that were mistakenly added)
+        # Don't append vuln if it's not a dict
+    
+    # Use enhanced vulnerabilities for counting (filter out any non-dict items)
+    vulns = [v for v in enhanced_vulns if isinstance(v, dict)]
     medium = len([v for v in vulns if (v.get('severity') or '').lower() == 'medium'])
     high = len([v for v in vulns if (v.get('severity') or '').lower() == 'high'])
     critical = len([v for v in vulns if (v.get('severity') or '').lower() == 'critical'])
+    # Extract recon data from agent-specific results
+    recon_data = results.get('ReconAgent', {})
+    exploit_data = results.get('ExploitAgent', {})
+    
+    # Get recon statistics from main fields and agent_results
+    subdomains = recon_data.get('subdomains', []) or []
+    technologies = recon_data.get('technologies', {}) or {}
+    ports = recon_data.get('ports', {}) or {}
+    urls = recon_data.get('urls', []) or []
+    services = recon_data.get('services', {}) or {}
+    
+    # Also check agent_results for additional data
+    agent_results = recon_data.get('agent_results', {})
+    if agent_results:
+        # Check service_detection for additional data
+        service_detection = agent_results.get('service_detection', {})
+        if service_detection:
+            # Merge technologies and services from service_detection
+            sd_technologies = service_detection.get('technologies', {})
+            sd_services = service_detection.get('services', {})
+            if isinstance(sd_technologies, dict):
+                technologies.update(sd_technologies)
+            if isinstance(sd_services, dict):
+                services.update(sd_services)
+                
+            # Check sub-agents for port information
+            sd_agent_results = service_detection.get('agent_results', {})
+            for agent_name, agent_data in sd_agent_results.items():
+                if isinstance(agent_data, dict):
+                    agent_ports = agent_data.get('ports', {})
+                    agent_services = agent_data.get('services', {})
+                    agent_technologies = agent_data.get('technologies', {})
+                    
+                    if isinstance(agent_ports, dict):
+                        ports.update(agent_ports)
+                    if isinstance(agent_services, dict):
+                        services.update(agent_services)
+                    if isinstance(agent_technologies, dict):
+                        technologies.update(agent_technologies)
+    
+    # For localhost targets, infer basic information
+    target_domain = results.get('target_domain', results.get('target', 'unknown'))
+    if '127.0.0.1' in target_domain or 'localhost' in target_domain:
+        # Extract port from target (e.g., "127.0.0.1:3002")
+        if ':' in target_domain:
+            port = target_domain.split(':')[-1]
+            if port.isdigit():
+                ports[port] = 'open'
+                services[port] = 'http'
+                technologies['web_server'] = 'detected'
+    
+    # Count discovered items
+    subdomains_count = len(subdomains) if isinstance(subdomains, list) else 0
+    technologies_count = len(technologies) if isinstance(technologies, dict) else 0
+    ports_count = len(ports) if isinstance(ports, dict) else 0
+    urls_count = len(urls) if isinstance(urls, list) else 0
+    services_count = len(services) if isinstance(services, dict) else 0
+    
     analysis = {
         'target_info': {
-            'domain': results.get('target_domain', 'unknown'),
-            'subdomains_discovered': len(results.get('subdomains', []) or []),
-            'technologies_identified': len(results.get('technologies', []) or []),
-            'ports_discovered': len(results.get('open_ports', []) or []),
+            'domain': target_domain,
+            'subdomains_discovered': subdomains_count,
+            'technologies_identified': technologies_count,
+            'ports_discovered': ports_count,
+            'urls_discovered': urls_count,
+            'services_discovered': services_count,
         },
         'scan_summary': {
             'total_vulnerabilities': len(vulns),
@@ -77,7 +254,32 @@ async def get_all_reports(
         query = select(Scan).where(Scan.status == ScanStatus.COMPLETED).offset(skip).limit(limit)
         result = await db.execute(query)
         scans = result.scalars().all()
-        return {"reports": [s.results for s in scans if s.results]}
+        
+        reports = []
+        for scan in scans:
+            if scan.results:
+                # Count vulnerabilities from results
+                vuln_count = 0
+                if isinstance(scan.results, dict):
+                    for agent_name, agent_results in scan.results.items():
+                        if isinstance(agent_results, dict) and 'vulnerabilities' in agent_results:
+                            vulns = agent_results['vulnerabilities']
+                            if isinstance(vulns, list):
+                                vuln_count += len(vulns)
+                
+                report = {
+                    "scan_id": str(scan.id),
+                    "target_id": str(scan.target_id),
+                    "scan_name": scan.name,
+                    "report_type": "comprehensive",
+                    "status": "completed",
+                    "findings_count": vuln_count,
+                    "created_at": scan.completed_at.isoformat() if scan.completed_at and hasattr(scan.completed_at, 'isoformat') else (scan.created_at.isoformat() if scan.created_at and hasattr(scan.created_at, 'isoformat') else str(scan.created_at)),
+                    "results": scan.results
+                }
+                reports.append(report)
+        
+        return reports
     except Exception as e:
         logger.error(f"Failed to get reports: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -95,9 +297,52 @@ async def get_scan_reports(
         scan = result.scalar_one_or_none()
         if not scan:
             raise HTTPException(status_code=404, detail="Scan not found")
-        return scan.results or {}
+        
+        if not scan.results:
+            return []
+        
+        # Parse results if it's a JSON string (CRITICAL FIX)
+        import json
+        scan_results = scan.results
+        if isinstance(scan_results, str):
+            try:
+                scan_results = json.loads(scan_results)
+            except json.JSONDecodeError:
+                scan_results = {}
+        
+        # Count vulnerabilities from results
+        vuln_count = 0
+        if isinstance(scan_results, dict):
+            for agent_name, agent_results in scan_results.items():
+                if isinstance(agent_results, dict) and 'vulnerabilities' in agent_results:
+                    vulns = agent_results['vulnerabilities']
+                    if isinstance(vulns, list):
+                        vuln_count += len(vulns)
+        
+        # Build analysis for reports
+        analysis = _build_analysis_from_results(scan_results)
+        vuln_count = analysis.get('scan_summary', {}).get('total_vulnerabilities', vuln_count)
+        
+        # Generate different report types for this specific scan
+        reports = []
+        report_types = ["executive", "technical", "comprehensive"]
+        
+        for report_type in report_types:
+            report = {
+                "scan_id": str(scan.id),
+                "target_id": str(scan.target_id),
+                "scan_name": scan.name,
+                "report_type": report_type,
+                "status": "completed" if scan.status == ScanStatus.COMPLETED else "pending",
+                "findings_count": vuln_count,
+                "created_at": scan.completed_at.isoformat() if scan.completed_at and hasattr(scan.completed_at, 'isoformat') else (scan.created_at.isoformat() if scan.created_at and hasattr(scan.created_at, 'isoformat') else str(scan.created_at)),
+                "analysis": analysis  # Include analysis in report
+            }
+            reports.append(report)
+        
+        return reports
     except Exception as e:
-        logger.error(f"Failed to get reports for scan {scan_id}: {e}")
+        logger.error(f"Failed to get scan reports: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -169,10 +414,20 @@ async def get_executive_report(scan_id: UUID, format: str = "html", db: AsyncSes
         scan = result.scalar_one_or_none()
         if not scan:
             raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Parse results if it's a JSON string (CRITICAL FIX)
+        import json
+        scan_results = scan.results or {}
+        if isinstance(scan_results, str):
+            try:
+                scan_results = json.loads(scan_results)
+            except json.JSONDecodeError:
+                scan_results = {}
+        
         if format == "html":
             from agents.report_agent import ReportAgent
             agent = ReportAgent()
-            analysis = _build_analysis_from_results(scan.results or {})
+            analysis = _build_analysis_from_results(scan_results)
             # Generate executive-focused HTML report
             html = await agent._generate_html_report(analysis, report_type="executive")
             return Response(content=html, media_type="text/html")
@@ -269,10 +524,20 @@ async def get_technical_report_alias(scan_id: UUID, format: str = "html", db: As
         scan = result.scalar_one_or_none()
         if not scan:
             raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Parse results if it's a JSON string (CRITICAL FIX)
+        import json
+        scan_results = scan.results or {}
+        if isinstance(scan_results, str):
+            try:
+                scan_results = json.loads(scan_results)
+            except json.JSONDecodeError:
+                scan_results = {}
+        
         if format == "html":
             from agents.report_agent import ReportAgent
             agent = ReportAgent()
-            analysis = _build_analysis_from_results(scan.results or {})
+            analysis = _build_analysis_from_results(scan_results)
             # Generate technical-focused HTML report
             html = await agent._generate_html_report(analysis, report_type="technical")
             return Response(content=html, media_type="text/html")

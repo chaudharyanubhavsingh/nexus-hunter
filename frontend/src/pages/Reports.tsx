@@ -36,10 +36,11 @@ const Reports: React.FC = () => {
     });
   }, [isLoading, hasError, state.scans.length, reportsQuery.status, scansQuery.status]);
 
-  const handleDownloadReport = async (scanId: string, reportType: string, format: string = 'pdf') => {
+  const handleDownloadReport = async (scanId: string, reportType: string) => {
     try {
-      console.log('Downloading report:', { scanId, reportType, format });
-      await downloadReportMutation.mutateAsync({ scanId, reportType, format });
+      console.log('Downloading PDF report:', { scanId, reportType });
+      // Always download as PDF - this is the intended workflow
+      await downloadReportMutation.mutateAsync({ scanId, reportType, format: 'pdf' });
     } catch (error) {
       console.error('Error downloading report:', error);
       // Error handling is done in the mutation
@@ -86,8 +87,27 @@ const Reports: React.FC = () => {
     })
     .flatMap(scan => {
       const target = state.targets.find(t => t.id === scan.target_id);
-      const vulnerabilityCount = scan.results?.vulnerabilities?.length || 0;
-      const criticalCount = scan.results?.vulnerabilities?.filter((v: any) => v.severity === 'critical').length || 0;
+      
+      // Calculate vulnerability count from agent-specific results
+      let vulnerabilityCount = 0;
+      let criticalCount = 0;
+      
+      if (scan.results) {
+        // Check for flat vulnerabilities array (legacy format)
+        if (Array.isArray(scan.results.vulnerabilities)) {
+          vulnerabilityCount = scan.results.vulnerabilities.length;
+          criticalCount = scan.results.vulnerabilities.filter((v: any) => v.severity === 'critical').length;
+        } else {
+          // Check agent-specific results (new format)
+          Object.keys(scan.results).forEach(agentName => {
+            const agentResults = scan.results[agentName];
+            if (agentResults && Array.isArray(agentResults.vulnerabilities)) {
+              vulnerabilityCount += agentResults.vulnerabilities.length;
+              criticalCount += agentResults.vulnerabilities.filter((v: any) => v.severity === 'critical').length;
+            }
+          });
+        }
+      }
       
       return [
         {
@@ -159,14 +179,6 @@ const Reports: React.FC = () => {
             </p>
           </div>
           <div className="flex gap-4">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="bg-neon-green bg-opacity-20 border border-neon-green text-neon-green px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-opacity-30 transition-all"
-            >
-              <FileText size={20} />
-              GENERATE REPORT
-            </motion.button>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -333,7 +345,7 @@ const Reports: React.FC = () => {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDownloadReport(report.scanId, report.type, 'pdf')}
+                        onClick={() => handleDownloadReport(report.scanId, report.type)}
                         disabled={downloadReportMutation.isLoading}
                         className="bg-cyber-gray bg-opacity-20 border border-cyber-gray text-cyber-gray py-2 px-3 rounded text-sm hover:bg-opacity-30 transition-all disabled:opacity-50"
                         title="Download PDF"

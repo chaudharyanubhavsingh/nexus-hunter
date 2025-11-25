@@ -22,7 +22,8 @@ export type InputType =
   | 'textarea' | 'select' | 'multiselect' | 'checkbox' | 'radio' | 'switch'
   | 'file' | 'image' | 'date' | 'datetime-local' | 'time' | 'range'
   | 'color' | 'json' | 'code' | 'tags' | 'ip' | 'port' | 'domain'
-  | 'currency' | 'percentage' | 'rating' | 'autocomplete' | 'phone';
+  | 'currency' | 'percentage' | 'rating' | 'autocomplete' | 'phone'
+  | 'custom_hierarchical_radio';
 
 export interface FormField {
   name: string;
@@ -32,7 +33,17 @@ export interface FormField {
   description?: string;
   required?: boolean;
   disabled?: boolean;
-  options?: Array<{ value: string; label: string; disabled?: boolean }>;
+  options?: Array<{ 
+    value: string; 
+    label: string; 
+    description?: string;
+    disabled?: boolean;
+    isCategory?: boolean;
+    isSubOption?: boolean;
+    isFullAssessment?: boolean;
+    parentCategory?: string;
+    children?: string[];
+  }>;
   multiple?: boolean;
   accept?: string; // For file inputs
   min?: number | string;
@@ -102,7 +113,8 @@ const getFieldIcon = (type: InputType, fieldIcon?: React.ComponentType<any>) => 
     percentage: Hash,
     rating: CheckCircle,
     autocomplete: Search,
-    phone: Phone
+    phone: Phone,
+    custom_hierarchical_radio: CheckCircle
   };
   
   return iconMap[type] || User;
@@ -220,6 +232,134 @@ const UniversalInput: React.FC<{
                 <span className="text-cyber-white">{option.label}</span>
               </label>
             ))}
+          </div>
+        );
+
+      case 'custom_hierarchical_radio':
+        return (
+          <div className="space-y-4">
+            {field.options?.map(option => {
+              // Categories
+              if (option.isCategory) {
+                const childOptions = field.options?.filter(child => 
+                  child.parentCategory === option.value && child.isSubOption
+                );
+                
+                return (
+                  <div key={option.value} className="space-y-3">
+                    {/* Main Category Option */}
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 bg-cyber-gray bg-opacity-10 border border-cyber-gray border-opacity-20 rounded-lg hover:bg-opacity-20 transition-colors">
+                      <input
+                        type="radio"
+                        name={field.name}
+                        value={option.value}
+                        checked={value === option.value}
+                        onChange={(e) => handleChange(e.target.value)}
+                        onBlur={onBlur}
+                        disabled={field.disabled || option.disabled}
+                        className="w-5 h-5 mt-1 text-neon-cyan bg-cyber-gray border-cyber-gray focus:ring-neon-cyan focus:ring-2"
+                      />
+                      <div className="flex-1">
+                        <div className="font-semibold text-cyber-white text-base mb-1">
+                          {option.label}
+                        </div>
+                        {option.description && (
+                          <div className="text-sm text-cyber-muted mb-2">
+                            {option.description}
+                          </div>
+                        )}
+
+                      </div>
+                    </label>
+                    
+                    {/* Sub-options - always visible but styled as sub-options */}
+                    <div className="ml-8 space-y-2 border-l-2 border-cyber-gray border-opacity-20 pl-4">
+                      {childOptions?.map(childOption => {
+                        const isParentSelected = value === option.value;
+                        const isChildSelected = value === childOption.value;
+                        const shouldHighlight = isParentSelected || isChildSelected;
+                        
+                        return (
+                          <label key={childOption.value} className={`flex items-center space-x-3 cursor-pointer p-3 rounded-lg transition-all ${
+                            shouldHighlight 
+                              ? 'bg-neon-blue bg-opacity-10 border border-neon-blue border-opacity-30' 
+                              : 'bg-cyber-gray bg-opacity-5 hover:bg-opacity-10'
+                          }`}>
+                            {/* Show visual indicator instead of trying to make radio appear checked */}
+                            {isParentSelected ? (
+                              // When parent is selected, show a checkmark instead of radio
+                              <div className="w-4 h-4 bg-neon-blue rounded-full flex items-center justify-center">
+                                <div className="w-2 h-2 bg-cyber-white rounded-full"></div>
+                              </div>
+                            ) : (
+                              // Normal radio button for individual selection
+                              <input
+                                type="radio"
+                                name={field.name}
+                                value={childOption.value}
+                                checked={isChildSelected}
+                                onChange={(e) => handleChange(e.target.value)}
+                                onBlur={onBlur}
+                                disabled={field.disabled || childOption.disabled}
+                                className="w-4 h-4 text-neon-blue bg-cyber-gray border-cyber-gray focus:ring-neon-blue focus:ring-2"
+                              />
+                            )}
+                            <div className="flex-1">
+                              <span className={`text-sm ${shouldHighlight ? 'text-neon-blue font-medium' : 'text-cyber-white'}`}>
+                                • {childOption.label}
+                              </span>
+                              {childOption.description && (
+                                <div className="text-xs text-cyber-muted mt-1">
+                                  {childOption.description}
+                                </div>
+                              )}
+                            </div>
+                            {/* Show included indicator when parent is selected */}
+                            {isParentSelected && (
+                              <div className="text-neon-blue text-xs font-medium">
+                                ✓ Included
+                              </div>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Full Assessment - special handling
+              else if (option.isFullAssessment) {
+                return (
+                  <div key={option.value} className="mt-6">
+                    <label className="flex items-start space-x-3 cursor-pointer p-4 bg-cyber-gray bg-opacity-10 border border-neon-green border-opacity-30 rounded-lg hover:bg-opacity-20 transition-colors">
+                      <input
+                        type="radio"
+                        name={field.name}
+                        value={option.value}
+                        checked={value === option.value}
+                        onChange={(e) => handleChange(e.target.value)}
+                        onBlur={onBlur}
+                        disabled={field.disabled || option.disabled}
+                        className="w-5 h-5 mt-1 text-neon-green bg-cyber-gray border-cyber-gray focus:ring-neon-green focus:ring-2"
+                      />
+                      <div className="flex-1">
+                        <div className="font-bold text-neon-green text-base mb-1">
+                          {option.label}
+                        </div>
+                        {option.description && (
+                          <div className="text-sm text-cyber-muted">
+                            {option.description}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                );
+              }
+              
+              return null; // Sub-options are already rendered under their categories
+            })}
           </div>
         );
 
@@ -417,16 +557,31 @@ const UniversalInput: React.FC<{
 
   return (
     <div className="space-y-2">
-      {field.type !== 'checkbox' && (
+      {field.type !== 'checkbox' && field.type !== 'custom_hierarchical_radio' && (
         <label className="block text-sm font-medium text-cyber-white">
           {field.label}
           {field.required && <span className="text-neon-red ml-1">*</span>}
         </label>
       )}
       
+      {field.type === 'custom_hierarchical_radio' && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-cyber-white mb-2">
+            {field.label}
+            {field.required && <span className="text-neon-red ml-1">*</span>}
+          </label>
+          {field.description && (
+            <p className="text-xs text-cyber-muted flex items-center mb-4">
+              <Info size={12} className="mr-1" />
+              {field.description}
+            </p>
+          )}
+        </div>
+      )}
+      
       {renderInput()}
       
-      {field.description && (
+      {field.description && field.type !== 'custom_hierarchical_radio' && (
         <p className="text-xs text-cyber-muted flex items-center">
           <Info size={12} className="mr-1" />
           {field.description}

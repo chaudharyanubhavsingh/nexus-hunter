@@ -232,11 +232,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const nextStatus = (statusPayload && typeof statusPayload.status === 'string')
         ? statusPayload.status
         : 'disconnected'
+      console.log('🔌 WebSocket status change:', nextStatus, statusPayload);
       dispatch({ type: 'SET_WS_STATUS', payload: nextStatus });
     });
 
     const unsubscribeScanUpdate = webSocketService.subscribe('scan_update', (message) => {
       if (message && message.scan_id) {
+        // CRITICAL FIX: Don't override completed/failed status with running updates
+        // This prevents progress bar from going backwards after completion
+        const existingScan = state.scans.find(s => s.id === message.scan_id);
+        const isTerminalStatus = existingScan && (existingScan.status === 'completed' || existingScan.status === 'failed');
+        
+        if (isTerminalStatus && message.status === 'running') {
+          console.log(`🛑 Ignoring stale 'running' update for completed scan ${message.scan_id}`);
+          return; // Ignore stale updates
+        }
+        
         dispatch({
           type: 'UPDATE_SCAN_BY_ID',
           payload: {
@@ -258,13 +269,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     const unsubscribeScanCompleted = webSocketService.subscribe('scan_completed', (message) => {
       if (message && message.scan_id) {
+        console.log(`✅ Scan ${message.scan_id} completed - setting progress to 100%`);
         dispatch({
           type: 'UPDATE_SCAN_BY_ID',
           payload: {
             scan_id: message.scan_id,
             updates: {
               status: 'completed',
-              progress_percentage: 100,
+              progress_percentage: 100,  // CRITICAL: Ensure progress is 100% on completion
               ...(message.results && { results: message.results }),
               ...(message.completed_at && { completed_at: message.completed_at })
             }

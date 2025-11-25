@@ -209,31 +209,44 @@ const AddTargetModal: React.FC<AddTargetModalProps> = ({ isOpen, onClose }) => {
         scopeArray = [normalizedDomain];
       }
 
-      // Prepare minimal data for backend
+      // Parse API config JSON if provided
+      let apiConfig = null;
+      if (formData.api_config) {
+        try {
+          apiConfig = JSON.parse(formData.api_config);
+        } catch (e) {
+          // JSON parsing already validated in validation schema
+        }
+      }
+
+      // Prepare COMPREHENSIVE data for backend - all fields now properly sent
       const targetData = {
+        // Basic fields
         name: formData.name,
         domain: normalizedDomain,
         description: formData.description || undefined,
         scope: scopeArray.length > 0 ? scopeArray : undefined,
         out_of_scope: formData.out_of_scope?.length > 0 ? formData.out_of_scope : undefined,
+        
+        // Advanced fields - now properly sent to backend instead of localStorage
+        priority: formData.priority || "medium",
+        max_depth: formData.max_depth ?? 5,
+        contact_email: formData.contact_email || undefined,
+        rate_limit: formData.rate_limit ?? 5,
+        authentication_required: !!formData.authentication_required,
+        api_config: apiConfig,
+        notes: formData.notes || undefined,
       };
 
       await createTargetMutation.mutateAsync(targetData);
 
-      // Persist advanced/optional settings locally for use during scan creation
+      // Still save some basic settings locally for UI convenience (optional)
       try {
-        const advancedSettings = {
-          priority: formData.priority || null,
-          max_depth: formData.max_depth ?? null,
-          contact_email: formData.contact_email || null,
-          rate_limit: formData.rate_limit ?? null,
-          authentication_required: !!formData.authentication_required,
-          api_config: (() => { try { return formData.api_config ? JSON.parse(formData.api_config) : null; } catch { return null; } })(),
-          notes: formData.notes || null,
-          scope_rules: scopeArray,
-          out_of_scope: targetData.out_of_scope || [],
+        const uiPreferences = {
+          priority: formData.priority || "medium",
+          scope_type: formData.scope_type || "full",
         };
-        localStorage.setItem(`target_settings:${normalizedDomain}`, JSON.stringify(advancedSettings));
+        localStorage.setItem(`target_ui_prefs:${normalizedDomain}`, JSON.stringify(uiPreferences));
       } catch {}
 
       onClose();

@@ -1,0 +1,4 @@
+# Fake/Test tokens that are not real secrets
+backend/agents/exploitation_agents/guaranteed_vulns_agent.py:jwt:330
+backend/agents/prompt_engineering/cybersecurity_llm.py:gcp-api-key:89
+backend/test_gemini_integration.py:gcp-api-key:98

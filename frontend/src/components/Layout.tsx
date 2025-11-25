@@ -17,6 +17,7 @@ import {
 
 import WebSocketStatus from './WebSocketStatus'
 import NotificationCenter from './NotificationCenter'
+import SystemStatus from './SystemStatus'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -25,7 +26,7 @@ interface LayoutProps {
 const navItems = [
   { path: '/', icon: Activity, label: 'Dashboard', description: 'Real-time overview' },
   { path: '/targets', icon: Target, label: 'Targets', description: 'Attack surface' },
-  { path: '/scans', icon: Scan, label: 'Scans', description: 'Active operations' },
+  { path: '/scans', icon: Scan, label: 'Scans', description: 'AI-powered operations' },
   { path: '/reports', icon: FileText, label: 'Reports', description: 'Intelligence output' },
   { path: '/settings', icon: Settings, label: 'Settings', description: 'Configuration' },
 ]
@@ -101,17 +102,8 @@ export default function Layout({ children }: LayoutProps) {
             
             <div className="flex items-center space-x-4">
               <NotificationCenter />
+              <SystemStatus />
               <WebSocketStatus />
-              
-              <motion.div 
-                className="flex items-center space-x-2 text-xs"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Zap size={12} className="text-warning animate-pulse" />
-                <span className="text-cyber-muted">ACTIVE</span>
-              </motion.div>
             </div>
           </div>
         </header>

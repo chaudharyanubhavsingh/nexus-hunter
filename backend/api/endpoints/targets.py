@@ -21,11 +21,21 @@ router = APIRouter()
 
 # Pydantic models
 class TargetCreateRequest(BaseModel):
+    # Basic fields
     name: str
     domain: str
     description: Optional[str] = None
     scope: Optional[List[str]] = None
     out_of_scope: Optional[List[str]] = None
+    
+    # Advanced fields - now properly supported
+    priority: Optional[str] = "medium"  # low, medium, high, critical
+    max_depth: Optional[int] = 5
+    contact_email: Optional[str] = None
+    rate_limit: Optional[int] = 5
+    authentication_required: Optional[bool] = False
+    api_config: Optional[dict] = None
+    notes: Optional[str] = None
 
     @validator('domain')
     def validate_domain(cls, v):
@@ -36,19 +46,54 @@ class TargetCreateRequest(BaseModel):
         # Remove protocol if present
         v = v.replace('http://', '').replace('https://', '').strip()
         
-        # Basic format check
-        if '.' not in v:
-            raise ValueError('Invalid domain format')
+        # Extract domain/host part (before port if present)
+        host_part = v.split(':')[0] if ':' in v else v
+        
+        # Allow localhost, IP addresses, or domains with dots
+        is_localhost = host_part.lower() == 'localhost'
+        is_ip = all(part.isdigit() and 0 <= int(part) <= 255 for part in host_part.split('.')) if '.' in host_part else False
+        is_domain = '.' in host_part
+        
+        if not (is_localhost or is_ip or is_domain):
+            raise ValueError('Invalid domain format. Must be a valid domain, IP address, or localhost')
         
         return v.lower()
+    
+    @validator('priority')
+    def validate_priority(cls, v):
+        if v and v not in ['low', 'medium', 'high', 'critical']:
+            raise ValueError('Priority must be one of: low, medium, high, critical')
+        return v or 'medium'
+    
+    @validator('max_depth')
+    def validate_max_depth(cls, v):
+        if v and (v < 1 or v > 10):
+            raise ValueError('Max depth must be between 1 and 10')
+        return v or 5
+    
+    @validator('rate_limit')
+    def validate_rate_limit(cls, v):
+        if v and (v < 1 or v > 100):
+            raise ValueError('Rate limit must be between 1 and 100')
+        return v or 5
 
 
 class TargetUpdateRequest(BaseModel):
+    # Basic fields
     name: Optional[str] = None
     description: Optional[str] = None
     scope: Optional[List[str]] = None
     out_of_scope: Optional[List[str]] = None
     is_active: Optional[bool] = None
+    
+    # Advanced fields
+    priority: Optional[str] = None
+    max_depth: Optional[int] = None
+    contact_email: Optional[str] = None
+    rate_limit: Optional[int] = None
+    authentication_required: Optional[bool] = None
+    api_config: Optional[dict] = None
+    notes: Optional[str] = None
 
 
 class TargetAdvancedSettings(BaseModel):
@@ -64,6 +109,7 @@ class TargetAdvancedSettings(BaseModel):
 
 
 class TargetResponse(BaseModel):
+    # Basic fields
     id: UUID
     name: str
     domain: str
@@ -73,6 +119,15 @@ class TargetResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    
+    # Advanced fields
+    priority: Optional[str]
+    max_depth: Optional[int]
+    contact_email: Optional[str]
+    rate_limit: Optional[int]
+    authentication_required: Optional[bool]
+    api_config: Optional[dict]
+    notes: Optional[str]
 
     class Config:
         from_attributes = True
@@ -100,13 +155,23 @@ async def create_target(
         if existing_target:
             raise HTTPException(status_code=400, detail="Target domain already exists")
         
-        # Create new target
+        # Create new target with ALL fields including advanced ones
         target = Target(
+            # Basic fields
             name=target_request.name,
             domain=target_request.domain,
             description=target_request.description,
             scope=target_request.scope or [],
-            out_of_scope=target_request.out_of_scope or []
+            out_of_scope=target_request.out_of_scope or [],
+            
+            # Advanced fields - now properly processed
+            priority=target_request.priority or "medium",
+            max_depth=target_request.max_depth or 5,
+            contact_email=target_request.contact_email,
+            rate_limit=target_request.rate_limit or 5,
+            authentication_required=target_request.authentication_required or False,
+            api_config=target_request.api_config,
+            notes=target_request.notes
         )
         
         db.add(target)

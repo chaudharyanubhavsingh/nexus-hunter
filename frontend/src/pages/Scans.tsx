@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Search, Square, Clock, AlertTriangle, Filter, CheckCircle, XCircle } from 'lucide-react';
+import { Play, Search, Square, Clock, AlertTriangle, Filter, CheckCircle, XCircle, Brain, Zap } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useScans, useCreateScan, useCancelScan, useDeleteScan } from '../hooks/useApi';
 import CreateScanModal from '../components/CreateScanModal';
@@ -130,11 +130,17 @@ const Scans: React.FC = () => {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-glow mb-2">
-              SECURITY OPERATIONS
-            </h1>
+            <div className="flex items-center space-x-3 mb-2">
+              <h1 className="text-4xl font-bold text-glow">
+                SECURITY OPERATIONS
+              </h1>
+              <div className="flex items-center space-x-2 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 px-3 py-1 rounded-lg">
+                <Brain className="w-5 h-5 text-purple-400" />
+                <span className="text-purple-300 text-sm font-medium">AI-POWERED</span>
+              </div>
+            </div>
             <p className="text-cyber-muted">
-              Monitor and manage autonomous security scans
+              Monitor and manage AI-powered autonomous security scans with intelligent decision making
             </p>
           </div>
           <div className="flex gap-4">
@@ -142,10 +148,10 @@ const Scans: React.FC = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setIsCreateModalOpen(true)}
-              className="bg-neon-green bg-opacity-20 border border-neon-green text-neon-green px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-opacity-30 transition-all"
+              className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500 text-purple-300 px-6 py-3 rounded-lg flex items-center gap-2 hover:from-purple-600/30 hover:to-blue-600/30 transition-all"
             >
-              <Play size={20} />
-              NEW SCAN
+              <Brain size={20} />
+              AI SCAN
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -166,13 +172,40 @@ const Scans: React.FC = () => {
           { label: 'Total Completed', value: state.scans.filter(s => s.status === 'completed').length.toString(), icon: CheckCircle, color: 'neon-green' },
           { label: 'Total Findings', value: state.scans.filter(s => s.status === 'completed' && s.results).reduce((sum, s) => {
             const results = typeof s.results === 'string' ? JSON.parse(s.results) : s.results;
-            const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : [];
-            return sum + (vulns.length > 0 ? vulns.length : 0);
+            
+            // Handle both flat vulnerabilities array (legacy) and agent-specific results (new)
+            let vulnCount = 0;
+            if (Array.isArray(results?.vulnerabilities)) {
+              vulnCount = results.vulnerabilities.length;
+            } else if (results) {
+              // Check agent-specific results
+              Object.keys(results).forEach(agentName => {
+                const agentResults = results[agentName];
+                if (agentResults && Array.isArray(agentResults.vulnerabilities)) {
+                  vulnCount += agentResults.vulnerabilities.length;
+                }
+              });
+            }
+            
+            return sum + vulnCount;
           }, 0).toString(), icon: Search, color: 'neon-pink' },
           { label: 'Critical Issues', value: state.scans.filter(s => s.status === 'completed' && s.results).reduce((sum, s) => {
             const results = typeof s.results === 'string' ? JSON.parse(s.results) : s.results;
-            const vulns = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : [];
-            const criticalCount = vulns.length > 0 ? vulns.filter((v: any) => v.severity === 'critical').length : 0;
+            
+            // Handle both flat vulnerabilities array (legacy) and agent-specific results (new)
+            let criticalCount = 0;
+            if (Array.isArray(results?.vulnerabilities)) {
+              criticalCount = results.vulnerabilities.filter((v: any) => v.severity === 'critical').length;
+            } else if (results) {
+              // Check agent-specific results
+              Object.keys(results).forEach(agentName => {
+                const agentResults = results[agentName];
+                if (agentResults && Array.isArray(agentResults.vulnerabilities)) {
+                  criticalCount += agentResults.vulnerabilities.filter((v: any) => v.severity === 'critical').length;
+                }
+              });
+            }
+            
             return sum + criticalCount;
           }, 0).toString(), icon: AlertTriangle, color: 'neon-orange' }
         ].map((stat, index) => (

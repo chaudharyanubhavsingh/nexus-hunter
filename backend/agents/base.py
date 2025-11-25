@@ -1,11 +1,13 @@
 """
 Base Agent class for Nexus Hunter autonomous agents
+Enhanced with professional cybersecurity prompt engineering
 """
 
 import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Callable
 from uuid import UUID
+from datetime import datetime
 
 from loguru import logger
 
@@ -13,14 +15,39 @@ from core.websocket_manager import WebSocketManager
 from core.redis_client import RedisClient
 
 
-class BaseAgent(ABC):
-    """Base class for all autonomous agents"""
+class AgentResult:
+    """Standard result class for agent operations"""
     
-    def __init__(self, name: str):
+    def __init__(self, success: bool = True, data: Dict[str, Any] = None, error: str = None, message: str = None):
+        self.success = success
+        self.data = data or {}
+        self.error = error
+        self.message = message
+        self.timestamp = datetime.now().isoformat()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to dictionary"""
+        return {
+            "success": self.success,
+            "data": self.data,
+            "error": self.error,
+            "message": self.message,
+            "timestamp": self.timestamp
+        }
+
+
+class BaseAgent(ABC):
+    """Base class for all autonomous agents with cybersecurity expertise"""
+    
+    def __init__(self, name: str, agent_type: str = None):
         self.name = name
+        self.agent_type = agent_type or name.lower().replace("agent", "")
         self.is_running = False
         self._progress_callback: Optional[Callable] = None
         self._cancel_event = asyncio.Event()
+        self._current_phase = "idle"
+        self._expert_context = {}
+        self.logger = logger  # Add logger attribute for agents that expect it
     
     def set_progress_callback(self, callback: Callable) -> None:
         """Set callback for progress updates"""
@@ -59,6 +86,67 @@ class BaseAgent(ABC):
     def is_cancelled(self) -> bool:
         """Check if agent execution was cancelled"""
         return self._cancel_event.is_set()
+    
+    async def get_expert_guidance(self, phase: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Get professional cybersecurity guidance for current phase"""
+        try:
+            # Import here to avoid circular imports
+            from agents.prompt_engineering.cybersecurity_llm import get_expert_guidance
+            
+            # Merge contexts
+            full_context = {**self._expert_context, **(context or {})}
+            full_context["agent_name"] = self.name
+            full_context["agent_type"] = self.agent_type
+            full_context["current_phase"] = phase
+            
+            self._current_phase = phase
+            
+            # Get expert guidance
+            guidance = await get_expert_guidance(self.agent_type, phase, full_context)
+            
+            # Log the guidance
+            logger.info(f"🧠 {self.name} received expert guidance for {phase} phase")
+            
+            # Broadcast guidance to UI
+            await self.update_progress(f"expert_guidance_{phase}", {
+                "guidance_available": True,
+                "expert_confidence": guidance.get("confidence", 80),
+                "methodology": guidance.get("methodology", "Professional cybersecurity approach"),
+                "phase": phase
+            })
+            
+            return guidance
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to get expert guidance: {e}")
+            return {
+                "guidance": f"Proceeding with standard {self.agent_type} methodology for {phase}",
+                "confidence": 70,
+                "source": "fallback"
+            }
+    
+    def set_expert_context(self, context: Dict[str, Any]) -> None:
+        """Set expert context for intelligent decision making"""
+        self._expert_context.update(context)
+        logger.debug(f"🎯 Updated expert context for {self.name}")
+    
+    async def expert_update_progress(self, phase: str, data: Dict[str, Any] = None, 
+                                   guidance_needed: bool = False) -> None:
+        """Enhanced progress update with optional expert guidance"""
+        progress_data = data or {}
+        
+        # Get expert guidance if needed
+        if guidance_needed:
+            guidance = await self.get_expert_guidance(phase, progress_data)
+            progress_data["expert_guidance"] = guidance.get("guidance", "")
+            progress_data["expert_confidence"] = guidance.get("confidence", 80)
+        
+        # Add cybersecurity context
+        progress_data["cybersecurity_phase"] = phase
+        progress_data["agent_expertise"] = self.agent_type
+        progress_data["professional_standards"] = True
+        
+        await self.update_progress(phase, progress_data)
     
     @abstractmethod
     async def execute(self, **kwargs) -> Dict[str, Any]:
@@ -112,6 +200,10 @@ class BaseAgent(ABC):
         except Exception as e:
             logger.error(f"Failed to load agent result: {e}")
             return None
+    
+    def _get_timestamp(self) -> str:
+        """Get current timestamp in ISO format"""
+        return datetime.now().isoformat()
 
 
 class AgentOrchestrator:

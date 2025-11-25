@@ -1,0 +1,413 @@
+{
+  "ReconAgent": {
+    "agent": "ReconAgent",
+    "timestamp": "2025-10-05T04:40:23.551393",
+    "target": "demo-vulnerable-app.com",
+    "subdomains": [
+      "api.demo-vulnerable-app.com",
+      "admin.demo-vulnerable-app.com",
+      "staging.demo-vulnerable-app.com",
+      "dev.demo-vulnerable-app.com",
+      "test.demo-vulnerable-app.com"
+    ],
+    "ports": {
+      "80": "http",
+      "443": "https",
+      "22": "ssh",
+      "3306": "mysql",
+      "6379": "redis",
+      "8080": "http-alt"
+    },
+    "technologies": {
+      "nginx": "1.18.0",
+      "php": "7.4.33",
+      "mysql": "8.0.32",
+      "redis": "6.2.6",
+      "wordpress": "6.1.1",
+      "jquery": "3.6.0"
+    },
+    "dns_info": {
+      "a_records": [
+        "192.168.1.100",
+        "192.168.1.101"
+      ],
+      "mx_records": [
+        "mail.demo-vulnerable-app.com"
+      ],
+      "ns_records": [
+        "ns1.demo-vulnerable-app.com",
+        "ns2.demo-vulnerable-app.com"
+      ]
+    }
+  },
+  "ExploitAgent": {
+    "agent": "ExploitAgent",
+    "timestamp": "2025-10-05T04:40:23.551401",
+    "target": "demo-vulnerable-app.com",
+    "vulnerabilities": [
+      {
+        "id": "NEXUS-001",
+        "title": "SQL Injection in User Authentication",
+        "severity": "critical",
+        "cvss_score": 9.8,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "cwe_id": "CWE-89",
+        "owasp_category": "A03:2021 \u2013 Injection",
+        "description": "A critical SQL injection vulnerability exists in the user authentication mechanism. An attacker can bypass authentication and gain unauthorized access to the database by manipulating SQL queries through user input fields.",
+        "url": "https://demo-vulnerable-app.com/login.php",
+        "method": "POST",
+        "parameter": "username",
+        "payload": "admin' OR '1'='1' -- ",
+        "evidence": "MySQL error: You have an error in your SQL syntax; Query: SELECT * FROM users WHERE username='admin' OR '1'='1' -- ' AND password='...'",
+        "impact": "Complete database compromise, unauthorized access to sensitive user data, potential for privilege escalation and system takeover.",
+        "remediation": "Implement parameterized queries/prepared statements, validate and sanitize all user inputs, apply principle of least privilege to database accounts.",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection",
+          "https://cwe.mitre.org/data/definitions/89.html"
+        ],
+        "discovered_by": "SQLInjectionAgent",
+        "timestamp": "2025-10-05T04:40:23.551402"
+      },
+      {
+        "id": "NEXUS-002",
+        "title": "Remote Code Execution via File Upload",
+        "severity": "critical",
+        "cvss_score": 9.6,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+        "cwe_id": "CWE-434",
+        "owasp_category": "A04:2021 \u2013 Insecure Design",
+        "description": "The file upload functionality does not properly validate file types, allowing attackers to upload and execute malicious PHP scripts on the server.",
+        "url": "https://demo-vulnerable-app.com/admin/upload.php",
+        "method": "POST",
+        "parameter": "file",
+        "payload": "malicious.php.txt (renamed to malicious.php)",
+        "evidence": "Successfully uploaded PHP shell: <?php system($_GET['cmd']); ?> - Command execution confirmed",
+        "impact": "Complete server compromise, ability to execute arbitrary commands, access to sensitive files and databases.",
+        "remediation": "Implement strict file type validation, use whitelist approach, store uploads outside web root, scan uploaded files for malicious content.",
+        "references": [
+          "https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload",
+          "https://cwe.mitre.org/data/definitions/434.html"
+        ],
+        "discovered_by": "FileUploadAgent",
+        "timestamp": "2025-10-05T04:40:23.551404"
+      },
+      {
+        "id": "NEXUS-003",
+        "title": "Reflected Cross-Site Scripting (XSS)",
+        "severity": "high",
+        "cvss_score": 7.4,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:N/A:N",
+        "cwe_id": "CWE-79",
+        "owasp_category": "A03:2021 \u2013 Injection",
+        "description": "User input is reflected in the response without proper encoding, allowing attackers to inject malicious JavaScript code that executes in victims' browsers.",
+        "url": "https://demo-vulnerable-app.com/search.php",
+        "method": "GET",
+        "parameter": "q",
+        "payload": "<script>alert('XSS')</script>",
+        "evidence": "JavaScript alert executed successfully, DOM manipulation confirmed",
+        "impact": "Session hijacking, credential theft, defacement, malicious redirects, keylogging.",
+        "remediation": "Implement proper output encoding, use Content Security Policy (CSP), validate and sanitize user inputs.",
+        "references": [
+          "https://owasp.org/www-community/attacks/xss/",
+          "https://cwe.mitre.org/data/definitions/79.html"
+        ],
+        "discovered_by": "AdvancedXSSAgent",
+        "timestamp": "2025-10-05T04:40:23.551405"
+      },
+      {
+        "id": "NEXUS-004",
+        "title": "Local File Inclusion (LFI)",
+        "severity": "high",
+        "cvss_score": 7.2,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
+        "cwe_id": "CWE-22",
+        "owasp_category": "A01:2021 \u2013 Broken Access Control",
+        "description": "The application includes files based on user input without proper validation, allowing attackers to read sensitive system files.",
+        "url": "https://demo-vulnerable-app.com/page.php",
+        "method": "GET",
+        "parameter": "file",
+        "payload": "../../../../etc/passwd",
+        "evidence": "Successfully retrieved /etc/passwd: root:x:0:0:root:/root:/bin/bash...",
+        "impact": "Exposure of sensitive system files, configuration files, source code, potential for remote code execution.",
+        "remediation": "Implement proper input validation, use whitelist approach for file inclusion, avoid user-controlled file paths.",
+        "references": [
+          "https://owasp.org/www-community/attacks/Path_Traversal",
+          "https://cwe.mitre.org/data/definitions/22.html"
+        ],
+        "discovered_by": "LFIAgent",
+        "timestamp": "2025-10-05T04:40:23.551406"
+      },
+      {
+        "id": "NEXUS-005",
+        "title": "Information Disclosure via Error Messages",
+        "severity": "medium",
+        "cvss_score": 5.3,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "cwe_id": "CWE-200",
+        "owasp_category": "A01:2021 \u2013 Broken Access Control",
+        "description": "Detailed error messages reveal sensitive information about the system architecture, database structure, and file paths.",
+        "url": "https://demo-vulnerable-app.com/api/users/999999",
+        "method": "GET",
+        "parameter": "id",
+        "payload": "999999",
+        "evidence": "MySQL Error: Table 'webapp.users' doesn't exist in database 'production_db' at /var/www/html/includes/database.php:42",
+        "impact": "Information leakage about system architecture, database names, file paths, technology stack.",
+        "remediation": "Implement custom error pages, log detailed errors server-side only, sanitize error messages for users.",
+        "references": [
+          "https://owasp.org/www-community/Improper_Error_Handling",
+          "https://cwe.mitre.org/data/definitions/200.html"
+        ],
+        "discovered_by": "SecretAgent",
+        "timestamp": "2025-10-05T04:40:23.551409"
+      },
+      {
+        "id": "NEXUS-006",
+        "title": "Missing Security Headers",
+        "severity": "medium",
+        "cvss_score": 4.3,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:N",
+        "cwe_id": "CWE-1021",
+        "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+        "description": "The application is missing critical security headers that help protect against various attacks.",
+        "url": "https://demo-vulnerable-app.com/",
+        "method": "GET",
+        "parameter": "headers",
+        "payload": "N/A",
+        "evidence": "Missing headers: X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Content-Security-Policy, Strict-Transport-Security",
+        "impact": "Increased risk of clickjacking, MIME type sniffing attacks, XSS attacks, and man-in-the-middle attacks.",
+        "remediation": "Implement comprehensive security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, etc.",
+        "references": [
+          "https://owasp.org/www-project-secure-headers/",
+          "https://cwe.mitre.org/data/definitions/1021.html"
+        ],
+        "discovered_by": "NucleiAgent",
+        "timestamp": "2025-10-05T04:40:23.551410"
+      },
+      {
+        "id": "NEXUS-007",
+        "title": "Directory Listing Enabled",
+        "severity": "low",
+        "cvss_score": 2.7,
+        "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+        "cwe_id": "CWE-548",
+        "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+        "description": "Directory listing is enabled on the web server, potentially exposing sensitive files and directory structure.",
+        "url": "https://demo-vulnerable-app.com/uploads/",
+        "method": "GET",
+        "parameter": "N/A",
+        "payload": "N/A",
+        "evidence": "Directory listing shows: backup.sql, config.php.bak, user_data.csv",
+        "impact": "Information disclosure about file structure, potential exposure of backup files and sensitive data.",
+        "remediation": "Disable directory listing in web server configuration, implement proper access controls.",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/548.html"
+        ],
+        "discovered_by": "FfufAgent",
+        "timestamp": "2025-10-05T04:40:23.551411"
+      }
+    ],
+    "agent_results": {
+      "SQLInjectionAgent": {
+        "vulnerabilities_found": 1,
+        "success_rate": "100%"
+      },
+      "FileUploadAgent": {
+        "vulnerabilities_found": 1,
+        "success_rate": "100%"
+      },
+      "AdvancedXSSAgent": {
+        "vulnerabilities_found": 1,
+        "success_rate": "100%"
+      },
+      "LFIAgent": {
+        "vulnerabilities_found": 1,
+        "success_rate": "100%"
+      },
+      "SecretAgent": {
+        "vulnerabilities_found": 1,
+        "success_rate": "100%"
+      },
+      "NucleiAgent": {
+        "vulnerabilities_found": 1,
+        "success_rate": "100%"
+      },
+      "FfufAgent": {
+        "vulnerabilities_found": 1,
+        "success_rate": "100%"
+      }
+    }
+  },
+  "target_domain": "demo-vulnerable-app.com",
+  "scan_completed": true,
+  "total_vulnerabilities": 7,
+  "critical_vulnerabilities": 2,
+  "high_vulnerabilities": 2,
+  "medium_vulnerabilities": 2,
+  "low_vulnerabilities": 1,
+  "scan_timestamp": "2025-10-05T04:40:23.551413",
+  "scan_duration": 1847,
+  "orchestrator_version": "3.0",
+  "ai_enhanced": true,
+  "vulnerabilities": [
+    {
+      "id": "NEXUS-001",
+      "title": "SQL Injection in User Authentication",
+      "severity": "critical",
+      "cvss_score": 9.8,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "cwe_id": "CWE-89",
+      "owasp_category": "A03:2021 \u2013 Injection",
+      "description": "A critical SQL injection vulnerability exists in the user authentication mechanism. An attacker can bypass authentication and gain unauthorized access to the database by manipulating SQL queries through user input fields.",
+      "url": "https://demo-vulnerable-app.com/login.php",
+      "method": "POST",
+      "parameter": "username",
+      "payload": "admin' OR '1'='1' -- ",
+      "evidence": "MySQL error: You have an error in your SQL syntax; Query: SELECT * FROM users WHERE username='admin' OR '1'='1' -- ' AND password='...'",
+      "impact": "Complete database compromise, unauthorized access to sensitive user data, potential for privilege escalation and system takeover.",
+      "remediation": "Implement parameterized queries/prepared statements, validate and sanitize all user inputs, apply principle of least privilege to database accounts.",
+      "references": [
+        "https://owasp.org/www-community/attacks/SQL_Injection",
+        "https://cwe.mitre.org/data/definitions/89.html"
+      ],
+      "discovered_by": "SQLInjectionAgent",
+      "timestamp": "2025-10-05T04:40:23.551402"
+    },
+    {
+      "id": "NEXUS-002",
+      "title": "Remote Code Execution via File Upload",
+      "severity": "critical",
+      "cvss_score": 9.6,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+      "cwe_id": "CWE-434",
+      "owasp_category": "A04:2021 \u2013 Insecure Design",
+      "description": "The file upload functionality does not properly validate file types, allowing attackers to upload and execute malicious PHP scripts on the server.",
+      "url": "https://demo-vulnerable-app.com/admin/upload.php",
+      "method": "POST",
+      "parameter": "file",
+      "payload": "malicious.php.txt (renamed to malicious.php)",
+      "evidence": "Successfully uploaded PHP shell: <?php system($_GET['cmd']); ?> - Command execution confirmed",
+      "impact": "Complete server compromise, ability to execute arbitrary commands, access to sensitive files and databases.",
+      "remediation": "Implement strict file type validation, use whitelist approach, store uploads outside web root, scan uploaded files for malicious content.",
+      "references": [
+        "https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload",
+        "https://cwe.mitre.org/data/definitions/434.html"
+      ],
+      "discovered_by": "FileUploadAgent",
+      "timestamp": "2025-10-05T04:40:23.551404"
+    },
+    {
+      "id": "NEXUS-003",
+      "title": "Reflected Cross-Site Scripting (XSS)",
+      "severity": "high",
+      "cvss_score": 7.4,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:N/A:N",
+      "cwe_id": "CWE-79",
+      "owasp_category": "A03:2021 \u2013 Injection",
+      "description": "User input is reflected in the response without proper encoding, allowing attackers to inject malicious JavaScript code that executes in victims' browsers.",
+      "url": "https://demo-vulnerable-app.com/search.php",
+      "method": "GET",
+      "parameter": "q",
+      "payload": "<script>alert('XSS')</script>",
+      "evidence": "JavaScript alert executed successfully, DOM manipulation confirmed",
+      "impact": "Session hijacking, credential theft, defacement, malicious redirects, keylogging.",
+      "remediation": "Implement proper output encoding, use Content Security Policy (CSP), validate and sanitize user inputs.",
+      "references": [
+        "https://owasp.org/www-community/attacks/xss/",
+        "https://cwe.mitre.org/data/definitions/79.html"
+      ],
+      "discovered_by": "AdvancedXSSAgent",
+      "timestamp": "2025-10-05T04:40:23.551405"
+    },
+    {
+      "id": "NEXUS-004",
+      "title": "Local File Inclusion (LFI)",
+      "severity": "high",
+      "cvss_score": 7.2,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
+      "cwe_id": "CWE-22",
+      "owasp_category": "A01:2021 \u2013 Broken Access Control",
+      "description": "The application includes files based on user input without proper validation, allowing attackers to read sensitive system files.",
+      "url": "https://demo-vulnerable-app.com/page.php",
+      "method": "GET",
+      "parameter": "file",
+      "payload": "../../../../etc/passwd",
+      "evidence": "Successfully retrieved /etc/passwd: root:x:0:0:root:/root:/bin/bash...",
+      "impact": "Exposure of sensitive system files, configuration files, source code, potential for remote code execution.",
+      "remediation": "Implement proper input validation, use whitelist approach for file inclusion, avoid user-controlled file paths.",
+      "references": [
+        "https://owasp.org/www-community/attacks/Path_Traversal",
+        "https://cwe.mitre.org/data/definitions/22.html"
+      ],
+      "discovered_by": "LFIAgent",
+      "timestamp": "2025-10-05T04:40:23.551406"
+    },
+    {
+      "id": "NEXUS-005",
+      "title": "Information Disclosure via Error Messages",
+      "severity": "medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "cwe_id": "CWE-200",
+      "owasp_category": "A01:2021 \u2013 Broken Access Control",
+      "description": "Detailed error messages reveal sensitive information about the system architecture, database structure, and file paths.",
+      "url": "https://demo-vulnerable-app.com/api/users/999999",
+      "method": "GET",
+      "parameter": "id",
+      "payload": "999999",
+      "evidence": "MySQL Error: Table 'webapp.users' doesn't exist in database 'production_db' at /var/www/html/includes/database.php:42",
+      "impact": "Information leakage about system architecture, database names, file paths, technology stack.",
+      "remediation": "Implement custom error pages, log detailed errors server-side only, sanitize error messages for users.",
+      "references": [
+        "https://owasp.org/www-community/Improper_Error_Handling",
+        "https://cwe.mitre.org/data/definitions/200.html"
+      ],
+      "discovered_by": "SecretAgent",
+      "timestamp": "2025-10-05T04:40:23.551409"
+    },
+    {
+      "id": "NEXUS-006",
+      "title": "Missing Security Headers",
+      "severity": "medium",
+      "cvss_score": 4.3,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:N",
+      "cwe_id": "CWE-1021",
+      "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+      "description": "The application is missing critical security headers that help protect against various attacks.",
+      "url": "https://demo-vulnerable-app.com/",
+      "method": "GET",
+      "parameter": "headers",
+      "payload": "N/A",
+      "evidence": "Missing headers: X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Content-Security-Policy, Strict-Transport-Security",
+      "impact": "Increased risk of clickjacking, MIME type sniffing attacks, XSS attacks, and man-in-the-middle attacks.",
+      "remediation": "Implement comprehensive security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, etc.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/",
+        "https://cwe.mitre.org/data/definitions/1021.html"
+      ],
+      "discovered_by": "NucleiAgent",
+      "timestamp": "2025-10-05T04:40:23.551410"
+    },
+    {
+      "id": "NEXUS-007",
+      "title": "Directory Listing Enabled",
+      "severity": "low",
+      "cvss_score": 2.7,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "cwe_id": "CWE-548",
+      "owasp_category": "A05:2021 \u2013 Security Misconfiguration",
+      "description": "Directory listing is enabled on the web server, potentially exposing sensitive files and directory structure.",
+      "url": "https://demo-vulnerable-app.com/uploads/",
+      "method": "GET",
+      "parameter": "N/A",
+      "payload": "N/A",
+      "evidence": "Directory listing shows: backup.sql, config.php.bak, user_data.csv",
+      "impact": "Information disclosure about file structure, potential exposure of backup files and sensitive data.",
+      "remediation": "Disable directory listing in web server configuration, implement proper access controls.",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/548.html"
+      ],
+      "discovered_by": "FfufAgent",
+      "timestamp": "2025-10-05T04:40:23.551411"
+    }
+  ]
+}

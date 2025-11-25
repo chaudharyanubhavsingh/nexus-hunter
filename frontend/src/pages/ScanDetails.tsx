@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Eye, AlertTriangle, CheckCircle, Play, Clock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useScanDetails, useDownloadReport } from '../hooks/useApi';
+import AgentStatusMonitor from '../components/AgentStatusMonitor';
 
 const formatDateTime = (iso?: string) => {
   try {
@@ -40,7 +41,21 @@ const ScanDetails: React.FC = () => {
   }, [scan, state.targets]);
 
   const results = (scan && (scan as any).results) || {};
-  const vulnerabilities: any[] = Array.isArray(results?.vulnerabilities) ? results.vulnerabilities : [];
+  
+  // Calculate vulnerabilities from agent-specific results
+  let vulnerabilities: any[] = [];
+  if (Array.isArray(results?.vulnerabilities)) {
+    // Legacy flat format
+    vulnerabilities = results.vulnerabilities;
+  } else if (results) {
+    // New agent-specific format
+    Object.keys(results).forEach(agentName => {
+      const agentResults = results[agentName];
+      if (agentResults && Array.isArray(agentResults.vulnerabilities)) {
+        vulnerabilities = vulnerabilities.concat(agentResults.vulnerabilities);
+      }
+    });
+  }
 
   const handleExport = async (type: 'technical' | 'executive' = 'technical') => {
     if (!scan) return;
@@ -154,32 +169,17 @@ const ScanDetails: React.FC = () => {
         </div>
 
         <div className="space-y-6">
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="bg-cyber-gray bg-opacity-10 border border-cyber-gray border-opacity-30 rounded-lg p-6">
-            <h3 className="text-lg font-bold text-neon-cyan mb-4">SCAN PROGRESS</h3>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <CheckCircle className={(scan?.status === 'running' || scan?.status === 'completed') ? 'text-neon-green' : 'text-cyber-gray'} size={20} />
-                <span className="text-cyber-white">Reconnaissance</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className={(scan?.status === 'running' || scan?.status === 'completed') ? 'text-neon-green' : 'text-cyber-gray'} size={20} />
-                <span className="text-cyber-white">Port Scanning</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Play className={scan?.status === 'running' ? 'text-neon-cyan' : scan?.status === 'completed' ? 'text-neon-green' : 'text-cyber-gray'} size={20} />
-                <span className="text-cyber-white">Vulnerability Testing</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Clock className={scan?.status === 'completed' ? 'text-neon-green' : 'text-cyber-gray'} size={20} />
-                <span className="text-cyber-white">Report Generation</span>
-              </div>
-              <div className="mt-4">
-                <div className="h-2 bg-cyber-gray bg-opacity-20 rounded">
-                  <div className="h-2 bg-neon-cyan rounded" style={{ width: `${Math.min(100, Number(scan?.progress_percentage || 0))}%` }} />
-                </div>
-                <div className="text-xs text-cyber-muted mt-1">Progress: {Math.min(100, Number(scan?.progress_percentage || 0))}%</div>
-              </div>
-            </div>
+          {/* Dynamic Agent Status Monitor */}
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }} 
+            animate={{ opacity: 1, x: 0 }} 
+            transition={{ delay: 0.3 }}
+          >
+            <AgentStatusMonitor 
+              scanId={scan?.id} 
+              compact={false}
+              showProgress={true}
+            />
           </motion.div>
         </div>
       </div>

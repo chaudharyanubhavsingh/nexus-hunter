@@ -76,12 +76,13 @@ class WebSocketService {
     }
 
     this.connectionStatus = 'connecting';
-    console.log(`WebSocket: Attempting to connect (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+    console.log(`🔌 WebSocket: Attempting to connect to ${WS_BASE_URL} (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
     
     try {
       this.socket = new WebSocket(WS_BASE_URL);
+      console.log('🔌 WebSocket object created, waiting for connection...');
     } catch (error) {
-      console.error('WebSocket: Failed to create connection:', error);
+      console.error('❌ WebSocket: Failed to create connection:', error);
       this.connectionStatus = 'error';
       this.isConnecting = false;
       this.scheduleReconnect();
@@ -89,7 +90,7 @@ class WebSocketService {
     }
 
     this.socket.onopen = () => {
-      console.log('WebSocket connected successfully');
+      console.log('🔌 WebSocket connected successfully to:', WS_BASE_URL);
       this.connectionStatus = 'connected';
       this.reconnectAttempts = 0;
       this.isManualDisconnect = false;
@@ -111,7 +112,7 @@ class WebSocketService {
     };
 
     this.socket.onerror = (error) => {
-      console.error('WebSocket connection error:', error);
+      console.error('❌ WebSocket connection error to', WS_BASE_URL, ':', error);
       this.connectionStatus = 'error';
       this.isConnecting = false;
       this.notifyStatusChange();

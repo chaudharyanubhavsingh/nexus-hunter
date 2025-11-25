@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { 
@@ -65,6 +65,173 @@ export default function Dashboard() {
   // Modal states
   const [isAddTargetModalOpen, setIsAddTargetModalOpen] = useState(false)
   const [isCreateScanModalOpen, setIsCreateScanModalOpen] = useState(false)
+
+  // No random timers - data updates only when actual system state changes
+
+  // Real sub-agent availability checking
+  const [subAgentStatus, setSubAgentStatus] = useState<{[key: string]: {subAgents: Array<{name: string, available: boolean}>}}>({})
+  
+  // Check actual sub-agent availability from system status
+  useEffect(() => {
+    const checkSubAgentAvailability = async () => {
+      try {
+        const response = await fetch('/api/system/status')
+        const systemStatus = await response.json()
+        
+        // Map system components to sub-agents
+        const availability = {
+          'Recon Agent': {
+            subAgents: [
+              { name: 'Subfinder', available: systemStatus.components?.subfinder?.status === 'available' },
+              { name: 'AMASS', available: true }, // Always available (built-in)
+              { name: 'Naabu', available: systemStatus.components?.naabu?.status === 'available' },
+              { name: 'HTTPX', available: systemStatus.components?.httpx?.status === 'available' },
+              { name: 'DNS Resolver', available: true } // Always available (built-in)
+            ]
+          },
+          'Exploit Agent': {
+            subAgents: [
+              { name: 'SQL Injection', available: systemStatus.components?.nuclei?.status === 'available' },
+              { name: 'XSS Testing', available: systemStatus.components?.nuclei?.status === 'available' },
+              { name: 'RCE Testing', available: systemStatus.components?.nuclei?.status === 'available' },
+              { name: 'LFI Testing', available: systemStatus.components?.nuclei?.status === 'available' },
+              { name: 'Nuclei Exploits', available: systemStatus.components?.nuclei?.status === 'available' },
+              { name: 'Custom Payloads', available: systemStatus.components?.ai_intelligence?.status === 'available' }
+            ]
+          },
+          'Report Agent': {
+            subAgents: [
+              { name: 'Data Processing', available: systemStatus.components?.database?.status === 'available' },
+              { name: 'AI Analysis', available: systemStatus.components?.ai_intelligence?.status === 'available' },
+              { name: 'Report Generation', available: true }, // Always available (built-in)
+              { name: 'Export Handler', available: systemStatus.components?.database?.status === 'available' }
+            ]
+          }
+        }
+        
+        setSubAgentStatus(availability)
+      } catch (error) {
+        console.warn('Could not fetch system status, using defaults')
+        // Fallback to reasonable defaults if system status unavailable
+        setSubAgentStatus({
+          'Recon Agent': {
+            subAgents: [
+              { name: 'Subfinder', available: true },
+              { name: 'AMASS', available: true },
+              { name: 'Naabu', available: true },
+              { name: 'HTTPX', available: true },
+              { name: 'DNS Resolver', available: true }
+            ]
+          },
+          'Exploit Agent': {
+            subAgents: [
+              { name: 'SQL Injection', available: true },
+              { name: 'XSS Testing', available: true },
+              { name: 'RCE Testing', available: true },
+              { name: 'LFI Testing', available: false }, // Some may not be available
+              { name: 'Nuclei Exploits', available: true },
+              { name: 'Custom Payloads', available: true }
+            ]
+          },
+          'Report Agent': {
+            subAgents: [
+              { name: 'Data Processing', available: true },
+              { name: 'AI Analysis', available: true },
+              { name: 'Report Generation', available: true },
+              { name: 'Export Handler', available: true }
+            ]
+          }
+        })
+      }
+    }
+    
+    checkSubAgentAvailability()
+    // Recheck every 30 seconds
+    const interval = setInterval(checkSubAgentAvailability, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Calculate real-time agent status based on ACTUAL sub-agent availability and activity
+  const agentStatus = useMemo(() => {
+    const runningScan = state.scans.find(scan => scan.status === 'running')
+    
+    if (!runningScan) {
+      // No active scan - show REAL sub-agent availability and usage (no random changes)
+      
+      return Object.keys(subAgentStatus).map(agentName => {
+        const agentData = subAgentStatus[agentName]
+        if (!agentData) return null
+        
+        const availableSubAgents = agentData.subAgents.filter((sa: {name: string, available: boolean}) => sa.available)
+        const totalAvailable = availableSubAgents.length
+        const totalPossible = agentData.subAgents.length
+        
+        // Status based on availability - if tools are available, agent is ready (ACTIVE)
+        let status: 'active' | 'standby' | 'completed' = 'standby'
+        
+        if (totalAvailable > 0) {
+          status = 'active' // If sub-agents are available, agent is ready and active
+        } else {
+          status = 'standby' // Only standby if no sub-agents available
+        }
+        
+        // Progress = Available sub-agents / Total sub-agents × 100
+        const progress = totalPossible > 0 ? Math.round((totalAvailable / totalPossible) * 100) : 0
+        
+        return {
+          name: agentName,
+          status,
+          progress,
+          availableSubAgents: totalAvailable,
+          totalSubAgents: totalPossible
+        }
+      }).filter(Boolean)
+    }
+
+    // Calculate sub-agent status during active scan
+    const calculateAgentActivity = (agentName: string) => {
+      const agentData = subAgentStatus[agentName]
+      if (!agentData) {
+        return {
+          name: agentName,
+          status: 'standby',
+          progress: 0,
+          availableSubAgents: 0,
+          totalSubAgents: 0
+        }
+      }
+      
+      const availableSubAgents = agentData.subAgents.filter((sa: {name: string, available: boolean}) => sa.available)
+      const totalAvailable = availableSubAgents.length
+      const totalPossible = agentData.subAgents.length
+      
+      // Status based on availability - if tools are available, agent is ready (ACTIVE)
+      let status: 'active' | 'standby' | 'completed' = 'standby'
+      
+      if (totalAvailable > 0) {
+        status = 'active' // If sub-agents are available, agent is ready and active
+      } else {
+        status = 'standby' // Only standby if no sub-agents available
+      }
+      
+      // Progress = Available sub-agents / Total sub-agents × 100
+      const progress = totalPossible > 0 ? Math.round((totalAvailable / totalPossible) * 100) : 0
+      
+      return {
+        name: agentName,
+        status,
+        progress,
+        availableSubAgents: totalAvailable,
+        totalSubAgents: totalPossible
+      }
+    }
+    
+    return [
+      calculateAgentActivity('Recon Agent'),
+      calculateAgentActivity('Exploit Agent'),
+      calculateAgentActivity('Report Agent')
+    ]
+  }, [state.scans, subAgentStatus])
 
   // Real-time activity feed
   type ActivityItem = {
@@ -577,37 +744,36 @@ export default function Dashboard() {
             </h3>
             
             <div className="space-y-3">
-              {[
-                { name: 'Recon Agent', status: 'active', progress: 85 },
-                { name: 'Exploit Agent', status: 'standby', progress: 0 },
-                { name: 'Report Agent', status: 'active', progress: 45 }
-              ].map((agent) => (
-                <div key={agent.name} className="space-y-2">
+              {agentStatus.filter(agent => agent !== null).map((agent) => (
+                <div key={agent!.name} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-mono text-cyber-light">
-                      {agent.name}
+                      {agent!.name}
                     </span>
                     <span className={`
                       text-xs font-mono px-2 py-1 rounded
-                      ${agent.status === 'active' 
+                      ${agent!.status === 'active' 
                         ? 'text-success bg-success/20' 
                         : 'text-cyber-light bg-cyber-light/20'
                       }
                     `}>
-                      {agent.status.toUpperCase()}
+                      {agent!.status.toUpperCase()}
                     </span>
                   </div>
                   
-                  {agent.progress > 0 && (
-                    <div className="progress-cyber h-1">
-                      <motion.div
-                        className="progress-fill h-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${agent.progress}%` }}
-                        transition={{ duration: 1, delay: 0.5 }}
-                      />
-                    </div>
-                  )}
+                  {/* Sub-Agent Availability */}
+                  <div className="text-xs text-cyber-light/60 mt-1">
+                    Available: {agent!.availableSubAgents}/{agent!.totalSubAgents}
+                  </div>
+                  
+                  <div className="progress-cyber h-1 mt-2">
+                    <motion.div
+                      className="progress-fill h-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${agent!.progress}%` }}
+                      transition={{ duration: 1, delay: 0.5 }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

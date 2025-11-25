@@ -1,0 +1,151 @@
+author: Nexus Hunter
+created_at: '2025-10-05T15:39:00.124290'
+description: Comprehensive enterprise security assessment
+global_config:
+  compliance_frameworks:
+  - SOC2
+  - ISO27001
+  - PCI-DSS
+  comprehensive_mode: true
+  concurrent_agents: 5
+  detailed_reporting: true
+id: enterprise_security_audit
+metadata:
+  estimated_duration: 7200
+  resource_requirements: high
+  tags:
+  - enterprise
+  - compliance
+  - comprehensive
+name: Enterprise Security Audit
+notifications:
+  channels:
+  - email
+  - slack
+  - webhook
+  executive_summary: true
+  on_completion: true
+  on_critical_findings: true
+steps:
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - subdomain_discovery
+  condition: null
+  config:
+    active_sources: true
+    passive_sources: true
+  dependencies: []
+  description: Comprehensive asset discovery
+  id: asset_discovery
+  name: Asset Discovery
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 2
+  timeout: 1200
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - dns_intelligence
+  condition: null
+  config:
+    analyze_records: true
+    check_dnssec: true
+  dependencies:
+  - asset_discovery
+  description: DNS security analysis
+  id: dns_analysis
+  name: DNS Intelligence
+  parallel_group: recon
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 1
+  timeout: 600
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - port_scanning
+  condition: null
+  config:
+    profile: enterprise
+    service_detection: true
+  dependencies:
+  - asset_discovery
+  description: Comprehensive port analysis
+  id: port_analysis
+  name: Port Analysis
+  parallel_group: recon
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 1
+  timeout: 1800
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - ssl_intelligence
+  condition: null
+  config:
+    analyze_ciphers: true
+    check_vulnerabilities: true
+  dependencies:
+  - port_analysis
+  description: SSL/TLS security analysis
+  id: ssl_analysis
+  name: SSL/TLS Analysis
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - medium
+  retry_count: 1
+  timeout: 600
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - nuclei_scanning
+  condition: null
+  config:
+    compliance_checks: true
+    templates:
+    - all
+  dependencies:
+  - ssl_analysis
+  - dns_analysis
+  description: Enterprise vulnerability assessment
+  id: vulnerability_assessment
+  name: Vulnerability Assessment
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - critical
+  retry_count: 1
+  timeout: 3600
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - secret_scanning
+  condition: null
+  config:
+    check_repositories: true
+    deep_scan: true
+  dependencies:
+  - vulnerability_assessment
+  description: Comprehensive secret exposure analysis
+  id: secret_scanning
+  name: Secret Scanning
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 1
+  timeout: 1800
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - github_intelligence
+  condition: null
+  config:
+    analyze_commits: true
+    check_secrets: true
+  dependencies:
+  - secret_scanning
+  description: GitHub repository security analysis
+  id: github_intelligence
+  name: Code Repository Analysis
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - medium
+  retry_count: 1
+  timeout: 1200
+triggers:
+- enabled: true
+  type: manual
+- cron: 0 1 1 * *
+  enabled: true
+  type: scheduled
+type: !!python/object/apply:agents.workflows.engine.WorkflowType
+- enterprise_security
+version: '1.0'

@@ -1,0 +1,116 @@
+author: Nexus Hunter
+created_at: '2025-08-24T16:39:29.117743'
+description: Comprehensive bug bounty hunting workflow
+global_config:
+  concurrent_agents: 3
+  output_formats:
+  - json
+  - html
+  rate_limiting: true
+  target_scope:
+  - in_scope_only
+id: bug_bounty_standard
+metadata:
+  estimated_duration: 3600
+  resource_requirements: medium
+  tags:
+  - bug_bounty
+  - web_security
+  - comprehensive
+name: Bug Bounty Standard Scan
+notifications:
+  channels:
+  - slack
+  - email
+  on_completion: true
+  on_critical_findings: true
+steps:
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - subdomain_discovery
+  condition: null
+  config:
+    aggressive: true
+    sources: all
+  dependencies: []
+  description: Discover subdomains using multiple sources
+  id: subdomain_discovery
+  name: Subdomain Discovery
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 2
+  timeout: 600
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - port_scanning
+  condition: null
+  config:
+    profile: common
+    timeout: 10
+  dependencies:
+  - subdomain_discovery
+  description: Scan for open ports and services
+  id: port_scanning
+  name: Port Scanning
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 1
+  timeout: 900
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - web_technology
+  condition: null
+  config:
+    deep_analysis: true
+  dependencies:
+  - port_scanning
+  description: Detect web technologies and frameworks
+  id: web_technology
+  name: Technology Detection
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - medium
+  retry_count: 1
+  timeout: 300
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - nuclei_scanning
+  condition: null
+  config:
+    rate_limit: 50
+    templates:
+    - critical
+    - high
+  dependencies:
+  - web_technology
+  description: Comprehensive vulnerability scanning
+  id: vulnerability_scan
+  name: Vulnerability Scanning
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - high
+  retry_count: 1
+  timeout: 1200
+- agent_type: !!python/object/apply:agents.agentic_ai.controller.AgentType
+  - vulnerability
+  condition: len(step_results['vulnerability_scan']['vulnerabilities']) > 0
+  config:
+    max_depth: 3
+    safe_mode: true
+  dependencies:
+  - vulnerability_scan
+  description: Custom vulnerability testing and exploitation
+  id: custom_exploit
+  name: Custom Vulnerability Testing
+  parallel_group: null
+  priority: !!python/object/apply:agents.agentic_ai.controller.TaskPriority
+  - medium
+  retry_count: 1
+  timeout: 1800
+triggers:
+- enabled: true
+  type: manual
+- cron: 0 2 * * *
+  enabled: false
+  type: scheduled
+type: !!python/object/apply:agents.workflows.engine.WorkflowType
+- bug_bounty
+version: '1.0'

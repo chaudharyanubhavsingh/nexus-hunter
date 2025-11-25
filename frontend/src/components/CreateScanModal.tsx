@@ -73,21 +73,78 @@ const CreateScanModal: React.FC<CreateScanModalProps> = ({
     {
       name: 'type',
       label: 'Scan Type',
-      type: 'radio',
+      type: 'custom_hierarchical_radio',
       description: 'Choose the type of security scan to perform',
       required: true,
       options: [
         { 
-          value: 'recon', 
-          label: '🔍 Reconnaissance - Basic discovery and enumeration (15-30 min)'
+          value: 'recon_category',
+          label: '🔍 RECONNAISSANCE',
+          description: 'Runs ALL reconnaissance scans (20-40 min total)',
+          isCategory: true,
+          children: ['reconnaissance', 'deep_recon']
+        },
+        { 
+          value: 'reconnaissance', 
+          label: 'Basic Reconnaissance - Quick discovery (5-10 min)',
+          parentCategory: 'recon_category',
+          isSubOption: true
+        },
+        { 
+          value: 'deep_recon', 
+          label: 'Deep Reconnaissance - Advanced analysis (15-30 min)',
+          parentCategory: 'recon_category',
+          isSubOption: true
+        },
+        {
+          value: 'vuln_category',
+          label: '🛡️ VULNERABILITY ASSESSMENT',
+          description: 'Runs ALL vulnerability testing scans (80-165 min total)',
+          isCategory: true,
+          children: ['vulnerability', 'secrets_scan', 'web_security']
         },
         { 
           value: 'vulnerability', 
-          label: '🛡️ Vulnerability Scan - Comprehensive security testing (30-60 min)'
+          label: 'Vulnerability Scan - Comprehensive testing (30-60 min)',
+          parentCategory: 'vuln_category',
+          isSubOption: true
+        },
+        { 
+          value: 'secrets_scan', 
+          label: 'Secrets Detection - Find credentials (20-45 min)',
+          parentCategory: 'vuln_category',
+          isSubOption: true
+        },
+        { 
+          value: 'web_security', 
+          label: 'Web Security - CORS, CSP, WAF analysis (30-60 min)',
+          parentCategory: 'vuln_category',
+          isSubOption: true
+        },
+        {
+          value: 'exploit_category',
+          label: '💥 EXPLOITATION TESTING',
+          description: 'Runs ALL exploitation scans (2.5-6.5 hours total)',
+          isCategory: true,
+          children: ['exploitation', 'zero_day_hunt']
+        },
+        { 
+          value: 'exploitation', 
+          label: 'Exploitation Testing - AI-guided attacks (45-90 min)',
+          parentCategory: 'exploit_category',
+          isSubOption: true
+        },
+        { 
+          value: 'zero_day_hunt', 
+          label: 'Zero-Day Discovery - Novel vulnerabilities (2-4 hours)',
+          parentCategory: 'exploit_category',
+          isSubOption: true
         },
         { 
           value: 'full', 
-          label: '🚀 Full Assessment - Complete security audit (1-2 hours)'
+          label: '🚀 FULL ASSESSMENT - Complete Security Audit (1-2 hours)',
+          description: 'Automatically includes ALL professional scans above',
+          isFullAssessment: true
         },
       ],
     },
@@ -365,7 +422,7 @@ const CreateScanModal: React.FC<CreateScanModalProps> = ({
   const initialData = useMemo(() => ({
     target_id: preselectedTargetId || (activeTargets.length > 0 ? activeTargets[0].id : ''),
     name: preselectedTargetId ? `Scan for ${activeTargets.find(t => t.id === preselectedTargetId)?.name || 'Target'}` : '',
-    type: 'recon',
+    type: 'reconnaissance',
     priority: 'medium',
     max_concurrent_requests: 10,
     timeout_seconds: 30,
@@ -483,21 +540,54 @@ const CreateScanModal: React.FC<CreateScanModalProps> = ({
                           <Settings size={16} className="mr-2" />
                           Quick Reference
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                          <div className="text-center p-3 bg-neon-cyan bg-opacity-10 rounded">
-                            <Target size={24} className="mx-auto mb-2 text-neon-cyan" />
-                            <div className="font-medium text-neon-cyan">Reconnaissance</div>
-                            <div className="text-cyber-muted">15-30 min • Basic discovery</div>
+                        <div className="space-y-4">
+                          {/* Reconnaissance Category */}
+                          <div className="p-3 bg-neon-cyan bg-opacity-5 border border-neon-cyan border-opacity-20 rounded-lg">
+                            <div className="font-medium text-neon-cyan mb-2 flex items-center">
+                              <Target size={16} className="mr-2" />
+                              🔍 RECONNAISSANCE (20-40 min)
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                              <div className="text-cyber-muted">• Basic Reconnaissance (5-10 min)</div>
+                              <div className="text-cyber-muted">• Deep Reconnaissance (15-30 min)</div>
+                            </div>
                           </div>
-                          <div className="text-center p-3 bg-neon-orange bg-opacity-10 rounded">
-                            <Shield size={24} className="mx-auto mb-2 text-neon-orange" />
-                            <div className="font-medium text-neon-orange">Vulnerability Scan</div>
-                            <div className="text-cyber-muted">30-60 min • Security testing</div>
+                          
+                          {/* Vulnerability Category */}
+                          <div className="p-3 bg-neon-orange bg-opacity-5 border border-neon-orange border-opacity-20 rounded-lg">
+                            <div className="font-medium text-neon-orange mb-2 flex items-center">
+                              <Shield size={16} className="mr-2" />
+                              🛡️ VULNERABILITY ASSESSMENT (80-165 min)
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                              <div className="text-cyber-muted">• Vulnerability Scan (30-60 min)</div>
+                              <div className="text-cyber-muted">• Secrets Detection (20-45 min)</div>
+                              <div className="text-cyber-muted">• Web Security (30-60 min)</div>
+                            </div>
                           </div>
-                          <div className="text-center p-3 bg-neon-red bg-opacity-10 rounded">
-                            <Zap size={24} className="mx-auto mb-2 text-neon-red" />
-                            <div className="font-medium text-neon-red">Full Assessment</div>
-                            <div className="text-cyber-muted">1-2 hours • Complete audit</div>
+                          
+                          {/* Exploitation Category */}
+                          <div className="p-3 bg-yellow-500 bg-opacity-5 border border-yellow-500 border-opacity-20 rounded-lg">
+                            <div className="font-medium text-yellow-500 mb-2 flex items-center">
+                              <Zap size={16} className="mr-2" />
+                              💥 EXPLOITATION TESTING (2.5-6.5 hours)
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                              <div className="text-cyber-muted">• Exploitation Testing (45-90 min)</div>
+                              <div className="text-cyber-muted">• Zero-Day Discovery (2-4 hours)</div>
+                            </div>
+                          </div>
+                          
+                          {/* Full Assessment */}
+                          <div className="p-4 bg-neon-green bg-opacity-10 border-2 border-neon-green border-opacity-30 rounded-lg">
+                            <div className="font-bold text-neon-green mb-2 flex items-center text-center">
+                              <Zap size={18} className="mr-2" />
+                              🚀 FULL ASSESSMENT (1-2 hours)
+                            </div>
+                            <div className="text-xs text-cyber-muted text-center">
+                              <div className="font-medium text-neon-green mb-1">Automatically includes ALL categories above:</div>
+                              <div>🔍 All Reconnaissance + 🛡️ All Vulnerability Assessment + 💥 All Exploitation Testing</div>
+                            </div>
                           </div>
                         </div>
                       </div>

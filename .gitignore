@@ -117,3 +117,8 @@ dump.rdb
 # Celery
 celerybeat-schedule
 celerybeat.pid
+paramspider/
+sqlmap/
+theHarvester/
+*.db-shm
+*.db-wal
